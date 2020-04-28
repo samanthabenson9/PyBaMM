@@ -485,11 +485,9 @@ class Symbol(anytree.NodeMixin):
             return pybamm.Scalar(1)
         elif any(variable.id == x.id for x in self.pre_order()):
             return self._diff(variable)
-        elif variable.id == pybamm.t.id and \
-                any(
-                    isinstance(x, (pybamm.VariableBase, pybamm.StateVectorBase))
-                    for x in self.pre_order()
-                ):
+        elif variable.id == pybamm.t.id and self.has_symbol_of_classes(
+            (pybamm.VariableBase, pybamm.StateVectorBase)
+        ):
             return self._diff(variable)
         else:
             return pybamm.Scalar(0)
@@ -513,7 +511,7 @@ class Symbol(anytree.NodeMixin):
         """
         raise NotImplementedError
 
-    def _base_evaluate(self, t=None, y=None, y_dot=None, u=None):
+    def _base_evaluate(self, t=None, y=None, y_dot=None, inputs=None):
         """evaluate expression tree
 
         will raise a ``NotImplementedError`` if this member function has not
@@ -541,7 +539,7 @@ class Symbol(anytree.NodeMixin):
             )
         )
 
-    def evaluate(self, t=None, y=None, y_dot=None, u=None, known_evals=None):
+    def evaluate(self, t=None, y=None, y_dot=None, inputs=None, known_evals=None):
         """Evaluate expression tree (wrapper to allow using dict of known values).
         If the dict 'known_evals' is provided, the dict is searched for self.id; if
         self.id is in the keys, return that value; otherwise, evaluate using
@@ -556,7 +554,7 @@ class Symbol(anytree.NodeMixin):
         y_dot : numpy.array, optional
             array with time derivatives of state values to evaluate when solving
             (default None)
-        u : dict, optional
+        inputs : dict, optional
             dictionary of inputs to use when solving (default None)
         known_evals : dict, optional
             dictionary containing known values (default None)
@@ -570,10 +568,10 @@ class Symbol(anytree.NodeMixin):
         """
         if known_evals is not None:
             if self.id not in known_evals:
-                known_evals[self.id] = self._base_evaluate(t, y, y_dot, u)
+                known_evals[self.id] = self._base_evaluate(t, y, y_dot, inputs)
             return known_evals[self.id], known_evals
         else:
-            return self._base_evaluate(t, y, y_dot, u)
+            return self._base_evaluate(t, y, y_dot, inputs)
 
     def evaluate_for_shape(self):
         """Evaluate expression tree to find its shape. For symbols that cannot be
@@ -610,7 +608,7 @@ class Symbol(anytree.NodeMixin):
         )
 
         # do the search, return true if no relevent nodes are found
-        return not any((isinstance(n, search_types)) for n in self.pre_order())
+        return not self.has_symbol_of_classes(search_types)
 
     def evaluate_ignoring_errors(self, t=0):
         """
@@ -626,7 +624,7 @@ class Symbol(anytree.NodeMixin):
 
         """
         try:
-            result = self.evaluate(t=t, u="shape test")
+            result = self.evaluate(t=t, inputs="shape test")
         except NotImplementedError:
             # return None if NotImplementedError is raised
             # (there is a e.g. Parameter, Variable, ... in the tree)
@@ -662,7 +660,9 @@ class Symbol(anytree.NodeMixin):
         """
         result = self.evaluate_ignoring_errors()
 
-        if isinstance(result, numbers.Number):
+        if isinstance(result, numbers.Number) or (
+            isinstance(result, np.ndarray) and result.shape == ()
+        ):
             return True
         else:
             return False
@@ -689,12 +689,12 @@ class Symbol(anytree.NodeMixin):
         """ Simplify the expression tree. See :class:`pybamm.Simplification`. """
         return pybamm.Simplification(simplified_symbols).simplify(self)
 
-    def to_casadi(self, t=None, y=None, ydot=None, u=None, casadi_symbols=None):
+    def to_casadi(self, t=None, y=None, y_dot=None, inputs=None, casadi_symbols=None):
         """
         Convert the expression tree to a CasADi expression tree.
         See :class:`pybamm.CasadiConverter`.
         """
-        return pybamm.CasadiConverter(casadi_symbols).convert(self, t, y, ydot, u)
+        return pybamm.CasadiConverter(casadi_symbols).convert(self, t, y, y_dot, inputs)
 
     def new_copy(self):
         """
@@ -721,15 +721,14 @@ class Symbol(anytree.NodeMixin):
         Shape of an object, found by evaluating it with appropriate t and y.
         """
         # Default behaviour is to try to evaluate the object directly
-        # Try with some large y, to avoid having to use pre_order (slow)
+        # Try with some large y, to avoid having to unpack (slow)
         try:
             y = np.linspace(0.1, 0.9, int(1e4))
-            evaluated_self = self.evaluate(0, y, y, u="shape test")
+            evaluated_self = self.evaluate(0, y, y, inputs="shape test")
         # If that fails, fall back to calculating how big y should really be
         except ValueError:
-            state_vectors_in_node = [
-                x for x in self.pre_order() if isinstance(x, pybamm.StateVector)
-            ]
+            unpacker = pybamm.SymbolUnpacker(pybamm.StateVector)
+            state_vectors_in_node = unpacker.unpack_symbol(self).values()
             if state_vectors_in_node == []:
                 y = None
             else:
@@ -738,7 +737,7 @@ class Symbol(anytree.NodeMixin):
                 )
                 # Pick a y that won't cause RuntimeWarnings
                 y = np.linspace(0.1, 0.9, min_y_size)
-            evaluated_self = self.evaluate(0, y, y)
+            evaluated_self = self.evaluate(0, y, y, inputs="shape test")
 
         # Return shape of evaluated object
         if isinstance(evaluated_self, numbers.Number):

@@ -82,7 +82,7 @@ class TestDiscretise(unittest.TestCase):
         disc.process_model(model)
 
         self.assertIsInstance(model.variables["b"], pybamm.ExternalVariable)
-        self.assertEqual(model.variables["b"].evaluate(u={"b": np.array([1])}), 1)
+        self.assertEqual(model.variables["b"].evaluate(inputs={"b": np.array([1])}), 1)
 
     def test_adding_0D_external_variable_fail(self):
         model = pybamm.BaseModel()
@@ -132,9 +132,11 @@ class TestDiscretise(unittest.TestCase):
 
         self.assertEqual(disc.y_slices[a.id][0], slice(0, 10, None))
 
+        self.assertEqual(model.y_slices[a][0], slice(0, 10, None))
+
         b_test = np.ones((10, 1))
         np.testing.assert_array_equal(
-            model.variables["b"].evaluate(u={"b": b_test}), b_test
+            model.variables["b"].evaluate(inputs={"b": b_test}), b_test
         )
 
         # check that b is added to the boundary conditions
@@ -199,13 +201,13 @@ class TestDiscretise(unittest.TestCase):
 
         b_test = np.linspace(0, 1, 15)[:, np.newaxis]
         np.testing.assert_array_equal(
-            model.variables["b"].evaluate(u={"b": b_test}), b_test
+            model.variables["b"].evaluate(inputs={"b": b_test}), b_test
         )
         np.testing.assert_array_equal(
-            model.variables["b1"].evaluate(u={"b": b_test}), b_test[:10]
+            model.variables["b1"].evaluate(inputs={"b": b_test}), b_test[:10]
         )
         np.testing.assert_array_equal(
-            model.variables["b2"].evaluate(u={"b": b_test}), b_test[10:]
+            model.variables["b2"].evaluate(inputs={"b": b_test}), b_test[10:]
         )
 
         # check that b is added to the boundary conditions
@@ -703,8 +705,11 @@ class TestDiscretise(unittest.TestCase):
         # test that any time derivatives of variables in rhs raises an
         # error
         model = pybamm.BaseModel()
-        model.rhs = {c: pybamm.div(N) + c.diff(pybamm.t),
-                     T: pybamm.div(q), S: pybamm.div(p)}
+        model.rhs = {
+            c: pybamm.div(N) + c.diff(pybamm.t),
+            T: pybamm.div(q),
+            S: pybamm.div(p),
+        }
         model.initial_conditions = {
             c: pybamm.Scalar(2),
             T: pybamm.Scalar(5),
@@ -931,7 +936,7 @@ class TestDiscretise(unittest.TestCase):
         # scalar
         broad = disc.process_symbol(pybamm.FullBroadcast(a, whole_cell, {}))
         np.testing.assert_array_equal(
-            broad.evaluate(u={"a": 7}),
+            broad.evaluate(inputs={"a": 7}),
             7 * np.ones_like(combined_submesh[0].nodes[:, np.newaxis]),
         )
         self.assertEqual(broad.domain, whole_cell)
@@ -953,7 +958,7 @@ class TestDiscretise(unittest.TestCase):
         broad_to_edges = pybamm.FullBroadcastToEdges(a, ["negative electrode"], None)
         broad_to_edges_disc = disc.process_symbol(broad_to_edges)
         np.testing.assert_array_equal(
-            broad_to_edges_disc.evaluate(u={"a": 7}),
+            broad_to_edges_disc.evaluate(inputs={"a": 7}),
             7 * np.ones_like(mesh["negative electrode"][0].edges[:, np.newaxis]),
         )
 
@@ -1011,6 +1016,7 @@ class TestDiscretise(unittest.TestCase):
             broad_disc.shape,
             (mesh["negative particle"][0].npts * mesh["negative electrode"][0].npts, 1),
         )
+        broad = pybamm.SecondaryBroadcast(var, "negative electrode")
 
         # test broadcast to edges
         broad_to_edges = pybamm.SecondaryBroadcastToEdges(var, "negative electrode")
@@ -1182,6 +1188,18 @@ class TestDiscretise(unittest.TestCase):
         np.testing.assert_equal(
             model.mass_matrix_inv.entries.toarray(), mass_inv.toarray()
         )
+
+    def test_process_input_variable(self):
+        disc = get_discretisation_for_testing()
+
+        a = pybamm.InputParameter("a")
+        a_disc = disc.process_symbol(a)
+        self.assertEqual(a_disc._expected_size, 1)
+
+        a = pybamm.InputParameter("a", ["negative electrode", "separator"])
+        a_disc = disc.process_symbol(a)
+        n = disc.mesh.combine_submeshes(*a.domain)[0].npts
+        self.assertEqual(a_disc._expected_size, n)
 
 
 if __name__ == "__main__":

@@ -28,15 +28,24 @@ class CasadiSolver(pybamm.BaseSolver):
         The relative tolerance for the solver (default is 1e-6).
     atol : float, optional
         The absolute tolerance for the solver (default is 1e-6).
-    root_method : str, optional
-        The method to use for finding consistend initial conditions. Default is 'lm'.
+    root_method : str or pybamm algebraic solver class, optional
+        The method to use to find initial conditions (for DAE solvers).
+        If a solver class, must be an algebraic solver class.
+        If "casadi",
+        the solver uses casadi's Newton rootfinding algorithm to find initial
+        conditions. Otherwise, the solver uses 'scipy.optimize.root' with method
+        specified by 'root_method' (e.g. "lm", "hybr", ...)
     root_tol : float, optional
         The tolerance for root-finding. Default is 1e-6.
     max_step_decrease_counts : float, optional
         The maximum number of times step size can be decreased before an error is
         raised. Default is 5.
-    extra_options : keyword arguments, optional
-        Any extra keyword-arguments; these are passed directly to the CasADi integrator.
+    extra_options_setup : dict, optional
+        Any options to pass to the CasADi integrator when creating the integrator.
+        Please consult `CasADi documentation <https://tinyurl.com/y5rk76os>`_ for
+        details.
+    extra_options_call : dict, optional
+        Any options to pass to the CasADi integrator when calling the integrator.
         Please consult `CasADi documentation <https://tinyurl.com/y5rk76os>`_ for
         details.
 
@@ -50,7 +59,8 @@ class CasadiSolver(pybamm.BaseSolver):
         root_method="casadi",
         root_tol=1e-6,
         max_step_decrease_count=5,
-        **extra_options,
+        extra_options_setup=None,
+        extra_options_call=None,
     ):
         super().__init__("problem dependent", rtol, atol, root_method, root_tol)
         if mode in ["safe", "fast"]:
@@ -64,7 +74,8 @@ class CasadiSolver(pybamm.BaseSolver):
                 )
             )
         self.max_step_decrease_count = max_step_decrease_count
-        self.extra_options = extra_options
+        self.extra_options_setup = extra_options_setup or {}
+        self.extra_options_call = extra_options_call or {}
         self.name = "CasADi solver with '{}' mode".format(mode)
 
         # Initialize
@@ -88,13 +99,9 @@ class CasadiSolver(pybamm.BaseSolver):
             Any external variables or input parameters to pass to the model when solving
         """
         inputs = inputs or {}
-        if len(model.rhs) == 0:
-            # casadi solver won't allow solving algebraic model so we have to raise an
-            # error here
-            raise pybamm.SolverError(
-                "Cannot use CasadiSolver to solve algebraic model,"
-                "use CasadiAlgebraicSolver instead"
-            )
+        # convert inputs to casadi format
+        inputs = casadi.vertcat(*[x for x in inputs.values()])
+
         if self.mode == "fast":
             integrator = self.get_integrator(model, t_eval, inputs)
             solution = self._run_integrator(integrator, model, model.y0, inputs, t_eval)
@@ -107,15 +114,18 @@ class CasadiSolver(pybamm.BaseSolver):
             solution.termination = "final time"
             return solution
         elif self.mode == "safe":
+            y0 = model.y0
+            if isinstance(y0, casadi.DM):
+                y0 = y0.full().flatten()
             # Step-and-check
             t = t_eval[0]
             init_event_signs = np.sign(
                 np.concatenate(
-                    [event(t, model.y0) for event in model.terminate_events_eval]
+                    [event(t, y0, inputs) for event in model.terminate_events_eval]
                 )
             )
             pybamm.logger.info("Start solving {} with {}".format(model.name, self.name))
-            y0 = model.y0
+
             # Initialize solution
             solution = pybamm.Solution(np.array([t]), y0[:, np.newaxis])
             solution.solve_time = 0
@@ -152,7 +162,7 @@ class CasadiSolver(pybamm.BaseSolver):
                 new_event_signs = np.sign(
                     np.concatenate(
                         [
-                            event(t, current_step_sol.y[:, -1])
+                            event(t, current_step_sol.y[:, -1], inputs)
                             for event in model.terminate_events_eval
                         ]
                     )
@@ -181,34 +191,33 @@ class CasadiSolver(pybamm.BaseSolver):
             y0 = model.y0
             rhs = model.casadi_rhs
             algebraic = model.casadi_algebraic
-            u_stacked = casadi.vertcat(*[x for x in inputs.values()])
 
             options = {
+                **self.extra_options_setup,
                 "grid": t_eval,
                 "reltol": self.rtol,
                 "abstol": self.atol,
                 "output_t0": True,
-                "max_num_steps": self.max_steps,
             }
 
             # set up and solve
             t = casadi.MX.sym("t")
-            u = casadi.MX.sym("u", u_stacked.shape[0])
-            y_diff = casadi.MX.sym("y_diff", rhs(t_eval[0], y0, u).shape[0])
-            problem = {"t": t, "x": y_diff, "p": u}
-            if algebraic(t_eval[0], y0, u).is_empty():
+            p = casadi.MX.sym("p", inputs.shape[0])
+            y_diff = casadi.MX.sym("y_diff", rhs(t_eval[0], y0, p).shape[0])
+            problem = {"t": t, "x": y_diff, "p": p}
+            if algebraic(t_eval[0], y0, p).is_empty():
                 method = "cvodes"
-                problem.update({"ode": rhs(t, y_diff, u)})
+                problem.update({"ode": rhs(t, y_diff, p)})
             else:
                 options["calc_ic"] = True
                 method = "idas"
-                y_alg = casadi.MX.sym("y_alg", algebraic(t_eval[0], y0, u).shape[0])
+                y_alg = casadi.MX.sym("y_alg", algebraic(t_eval[0], y0, p).shape[0])
                 y_full = casadi.vertcat(y_diff, y_alg)
                 problem.update(
                     {
                         "z": y_alg,
-                        "ode": rhs(t, y_full, u),
-                        "alg": algebraic(t, y_full, u),
+                        "ode": rhs(t, y_full, p),
+                        "alg": algebraic(t, y_full, p),
                     }
                 )
             self.problems[model] = problem
@@ -223,12 +232,11 @@ class CasadiSolver(pybamm.BaseSolver):
         )
 
     def _run_integrator(self, integrator, model, y0, inputs, t_eval):
-        rhs_size = model.rhs_eval(t_eval[0], y0).shape[0]
+        rhs_size = model.concatenated_rhs.size
         y0_diff, y0_alg = np.split(y0, [rhs_size])
         try:
             # Try solving
-            u_stacked = casadi.vertcat(*[x for x in inputs.values()])
-            sol = integrator(x0=y0_diff, z0=y0_alg, p=u_stacked, **self.extra_options)
+            sol = integrator(x0=y0_diff, z0=y0_alg, p=inputs, **self.extra_options_call)
             y_values = np.concatenate([sol["xf"].full(), sol["zf"].full()])
             return pybamm.Solution(t_eval, y_values)
         except RuntimeError as e:

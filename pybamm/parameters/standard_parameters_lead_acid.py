@@ -6,7 +6,6 @@ Standard Parameters for lead-acid battery models
 """
 import pybamm
 import numpy as np
-from scipy import constants
 
 
 # --------------------------------------------------------------------------------------
@@ -21,8 +20,8 @@ from scipy import constants
 # --------------------------------------------------------------------------------------
 "1. Dimensional Parameters"
 # Physical constants
-R = pybamm.Scalar(constants.R)
-F = pybamm.Scalar(constants.physical_constants["Faraday constant"][0])
+R = pybamm.constants.R
+F = pybamm.constants.F
 T_ref = pybamm.Parameter("Reference temperature [K]")
 
 # Macroscale geometry
@@ -49,7 +48,6 @@ voltage_high_cut_dimensional = pybamm.electrical_parameters.voltage_high_cut_dim
 
 # Electrolyte properties
 c_e_typ = pybamm.Parameter("Typical electrolyte concentration [mol.m-3]")
-t_plus = pybamm.Parameter("Cation transference number")
 V_w = pybamm.Parameter("Partial molar volume of water [m3.mol-1]")
 V_plus = pybamm.Parameter("Partial molar volume of cations [m3.mol-1]")
 V_minus = pybamm.Parameter("Partial molar volume of anions [m3.mol-1]")
@@ -61,13 +59,6 @@ nu = nu_plus + nu_minus
 # Other species properties
 c_ox_init_dim = pybamm.Parameter("Initial oxygen concentration [mol.m-3]")
 c_ox_typ = c_e_typ  # pybamm.Parameter("Typical oxygen concentration [mol.m-3]")
-
-# Electrode properties
-sigma_n_dim = pybamm.Parameter("Negative electrode conductivity [S.m-1]")
-sigma_p_dim = pybamm.Parameter("Positive electrode conductivity [S.m-1]")
-# In lead-acid the current collector and electrodes are the same (same conductivity)
-sigma_cn_dimensional = sigma_n_dim
-sigma_cp_dimensional = sigma_p_dim
 
 # Microstructure
 a_n_dim = pybamm.geometric_parameters.a_n_dim
@@ -84,6 +75,26 @@ xi_p = pybamm.Parameter("Positive electrode morphological parameter")
 epsilon_inactive_n = pybamm.Scalar(0)
 epsilon_inactive_s = pybamm.Scalar(0)
 epsilon_inactive_p = pybamm.Scalar(0)
+
+# Electrode properties
+V_Pb = pybamm.Parameter("Molar volume of lead [m3.mol-1]")
+V_PbO2 = pybamm.Parameter("Molar volume of lead-dioxide [m3.mol-1]")
+V_PbSO4 = pybamm.Parameter("Molar volume of lead sulfate [m3.mol-1]")
+DeltaVsurf_n = V_Pb - V_PbSO4  # Net Molar Volume consumed in neg electrode [m3.mol-1]
+DeltaVsurf_p = V_PbSO4 - V_PbO2  # Net Molar Volume consumed in pos electrode [m3.mol-1]
+d_n = pybamm.Parameter("Negative electrode pore size [m]")
+d_p = pybamm.Parameter("Positive electrode pore size [m]")
+eps_n_max = pybamm.Parameter("Maximum porosity of negative electrode")
+eps_s_max = pybamm.Parameter("Maximum porosity of separator")
+eps_p_max = pybamm.Parameter("Maximum porosity of positive electrode")
+Q_n_max_dimensional = pybamm.Parameter("Negative electrode volumetric capacity [C.m-3]")
+Q_p_max_dimensional = pybamm.Parameter("Positive electrode volumetric capacity [C.m-3]")
+sigma_n_dim = pybamm.Parameter("Negative electrode conductivity [S.m-1]")
+sigma_p_dim = pybamm.Parameter("Positive electrode conductivity [S.m-1]")
+# In lead-acid the current collector and electrodes are the same (same conductivity)
+# but we correct here for Bruggeman
+sigma_cn_dimensional = sigma_n_dim * (1 - eps_n_max) ** b_s_n
+sigma_cp_dimensional = sigma_p_dim * (1 - eps_p_max) ** b_s_p
 
 # Electrochemical reactions
 # Main
@@ -171,18 +182,27 @@ Delta_T = pybamm.thermal_parameters.Delta_T
 "2. Dimensional Functions"
 
 
+def t_plus(c_e):
+    "Dimensionless transference number (i.e. c_e is dimensionless)"
+    inputs = {"Electrolyte concentration [mol.m-3]": c_e * c_e_typ}
+    return pybamm.FunctionParameter("Cation transference number", inputs)
+
+
 def D_e_dimensional(c_e, T):
     "Dimensional diffusivity in electrolyte"
-    return pybamm.FunctionParameter("Electrolyte diffusivity [m2.s-1]", c_e)
+    inputs = {"Electrolyte concentration [mol.m-3]": c_e}
+    return pybamm.FunctionParameter("Electrolyte diffusivity [m2.s-1]", inputs)
 
 
 def kappa_e_dimensional(c_e, T):
     "Dimensional electrolyte conductivity"
-    return pybamm.FunctionParameter("Electrolyte conductivity [S.m-1]", c_e)
+    inputs = {"Electrolyte concentration [mol.m-3]": c_e}
+    return pybamm.FunctionParameter("Electrolyte conductivity [S.m-1]", inputs)
 
 
 def chi_dimensional(c_e):
-    return pybamm.FunctionParameter("Darken thermodynamic factor", c_e)
+    inputs = {"Electrolyte concentration [mol.m-3]": c_e}
+    return pybamm.FunctionParameter("Darken thermodynamic factor", inputs)
 
 
 def c_w_dimensional(c_e, c_ox=0, c_hy=0):
@@ -223,31 +243,37 @@ def mu_dimensional(c_e):
     """
     Dimensional viscosity of electrolyte [kg.m-1.s-1].
     """
-    return pybamm.FunctionParameter("Electrolyte viscosity [kg.m-1.s-1]", c_e)
+    inputs = {"Electrolyte concentration [mol.m-3]": c_e}
+    return pybamm.FunctionParameter("Electrolyte viscosity [kg.m-1.s-1]", inputs)
 
 
 def U_n_dimensional(c_e, T):
     "Dimensional open-circuit voltage in the negative electrode [V]"
+    inputs = {"Electrolyte molar mass [mol.kg-1]": m_dimensional(c_e)}
     return pybamm.FunctionParameter(
-        "Negative electrode open-circuit potential [V]", m_dimensional(c_e)
+        "Negative electrode open-circuit potential [V]", inputs
     )
 
 
 def U_p_dimensional(c_e, T):
     "Dimensional open-circuit voltage in the positive electrode [V]"
+    inputs = {"Electrolyte molar mass [mol.kg-1]": m_dimensional(c_e)}
     return pybamm.FunctionParameter(
-        "Positive electrode open-circuit potential [V]", m_dimensional(c_e)
+        "Positive electrode open-circuit potential [V]", inputs
     )
 
 
 D_e_typ = D_e_dimensional(c_e_typ, T_ref)
 rho_typ = rho_dimensional(c_e_typ)
 mu_typ = mu_dimensional(c_e_typ)
+
+inputs = {"Electrolyte concentration [mol.m-3]": pybamm.Scalar(1)}
 U_n_ref = pybamm.FunctionParameter(
-    "Negative electrode open-circuit potential [V]", pybamm.Scalar(1)
+    "Negative electrode open-circuit potential [V]", inputs
 )
+inputs = {"Electrolyte concentration [mol.m-3]": pybamm.Scalar(1)}
 U_p_ref = pybamm.FunctionParameter(
-    "Positive electrode open-circuit potential [V]", pybamm.Scalar(1)
+    "Positive electrode open-circuit potential [V]", inputs
 )
 
 
@@ -310,7 +336,7 @@ centre_y_tab_p = pybamm.geometric_parameters.centre_y_tab_p
 centre_z_tab_p = pybamm.geometric_parameters.centre_z_tab_p
 
 # Diffusive kinematic relationship coefficient
-omega_i = c_e_typ * M_e / rho_typ * (t_plus + M_minus / M_e)
+omega_i = c_e_typ * M_e / rho_typ * (t_plus(1) + M_minus / M_e)
 # Migrative kinematic relationship coefficient (electrolyte)
 omega_c_e = c_e_typ * M_e / rho_typ * (1 - M_w * V_e / V_w * M_e)
 C_e = tau_diffusion_e / tau_discharge
@@ -336,6 +362,8 @@ sigma_p = sigma_p_dim * potential_scale / current_scale / L_x
 sigma_cp = sigma_cp_dimensional * potential_scale / i_typ / L_x
 sigma_n_prime = sigma_n * delta ** 2
 sigma_p_prime = sigma_p * delta ** 2
+sigma_cn_prime = sigma_cn * delta ** 2
+sigma_cp_prime = sigma_cp * delta ** 2
 delta_pore_n = 1 / (a_n_dim * L_x)
 delta_pore_p = 1 / (a_p_dim * L_x)
 Q_n_max = Q_n_max_dimensional / (c_e_typ * F)
@@ -347,12 +375,10 @@ beta_U_p = -1 / Q_p_max
 # Main
 s_plus_n_S = s_plus_n_S_dim / ne_n_S
 s_plus_p_S = s_plus_p_S_dim / ne_p_S
-s_n = -(s_plus_n_S + t_plus)  # Dimensionless rection rate (neg)
-s_p = -(s_plus_p_S + t_plus)  # Dimensionless rection rate (pos)
-s = pybamm.Concatenation(
-    pybamm.FullBroadcast(s_n, ["negative electrode"], "current collector"),
+s_plus_S = pybamm.Concatenation(
+    pybamm.FullBroadcast(s_plus_n_S, ["negative electrode"], "current collector"),
     pybamm.FullBroadcast(0, ["separator"], "current collector"),
-    pybamm.FullBroadcast(s_p, ["positive electrode"], "current collector"),
+    pybamm.FullBroadcast(s_plus_p_S, ["positive electrode"], "current collector"),
 )
 j0_n_S_ref = j0_n_S_ref_dimensional / interfacial_current_scale_n
 j0_p_S_ref = j0_p_S_ref_dimensional / interfacial_current_scale_p
@@ -407,7 +433,9 @@ voltage_high_cut = (
 ) / potential_scale
 
 # Electrolyte volumetric capacity
-Q_e_max = (l_n * eps_n_max + l_s * eps_s_max + l_p * eps_p_max) / (s_p - s_n)
+Q_e_max = (l_n * eps_n_max + l_s * eps_s_max + l_p * eps_p_max) / (
+    s_plus_n_S - s_plus_p_S
+)
 Q_e_max_dimensional = Q_e_max * c_e_typ * F
 capacity = Q_e_max_dimensional * n_electrodes_parallel * A_cs * L_x
 
@@ -490,7 +518,7 @@ def kappa_e(c_e, T):
 def chi(c_e, c_ox=0, c_hy=0):
     return (
         chi_dimensional(c_e_typ * c_e)
-        * (2 * (1 - t_plus))
+        * (2 * (1 - t_plus(c_e)))
         / (V_w * c_T(c_e_typ * c_e, c_e_typ * c_ox, c_e_typ * c_hy))
     )
 
@@ -526,7 +554,7 @@ def U_p(c_e_p, T):
 # 6. Input current and voltage
 
 dimensional_current_with_time = pybamm.FunctionParameter(
-    "Current function [A]", pybamm.t * timescale
+    "Current function [A]", {"Time [s]": pybamm.t * timescale}
 )
 dimensional_current_density_with_time = dimensional_current_with_time / (
     n_electrodes_parallel * pybamm.geometric_parameters.A_cc
@@ -534,3 +562,7 @@ dimensional_current_density_with_time = dimensional_current_with_time / (
 current_with_time = (
     dimensional_current_with_time / I_typ * pybamm.Function(np.sign, I_typ)
 )
+
+
+"Remove any temporary variables"
+del inputs
