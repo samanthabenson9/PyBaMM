@@ -4,6 +4,8 @@
 
 import pybamm
 
+import warnings
+
 
 class BaseBatteryModel(pybamm.BaseModel):
     """
@@ -214,6 +216,7 @@ class BaseBatteryModel(pybamm.BaseModel):
             raise pybamm.OptionError(
                 "Unknown thermal model '{}'".format(options["thermal"])
             )
+
         if options["particle"] not in ["Fickian diffusion", "fast diffusion"]:
             raise pybamm.OptionError(
                 "particle model '{}' not recognised".format(options["particle"])
@@ -237,6 +240,11 @@ class BaseBatteryModel(pybamm.BaseModel):
                     "Thermal current collector effects are not implemented "
                     "for lead-acid models."
                 )
+
+        if options["thermal"] == "x-lumped" and options["dimensionality"] == 1:
+            warnings.warn(
+                "1+1D thermal problem only valid for both tabs at top of cell"
+            )
 
         self._options = options
 
