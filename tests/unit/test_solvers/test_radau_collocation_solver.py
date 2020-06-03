@@ -403,7 +403,7 @@ class TestRandauSolver(unittest.TestCase):
         solver = pybamm.ImplicitRandauSolver()
         t_eval = np.linspace(0, 1)
         with self.assertRaisesRegex(
-            pybamm.SolverError, "Cannot use ImplicitRandauSolver to solve algebraic model"
+            pybamm.SolverError, "Cannot use CasadiSolver to solve algebraic model"
         ):
             solver.solve(model, t_eval)
 

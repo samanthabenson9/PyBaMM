@@ -372,16 +372,16 @@ class ImplicitRandauSolver(pybamm.BaseSolver):
             # problem = {"t": t, "x": y_diff, "p": p}
 
             # End time
-            tf = t_eval[:]
+            tf = t_eval[-1]
             # Number of finite elements
-            n = t_eval.shape[0]
+            n = t_eval.shape[0] # siegeljb 6/3/2020, this is off by 1, need to fix eventually.
             # Size of the finite elements
             h = tf / n
 
             # Dimensions
-            nx = rhs(t_eval[0], y0, p).shape[0]
-            np = inputs.shape[0]
-            nz = algebraic(t_eval[0], y0, p).shape[0]
+            n_x = rhs(t_eval[0], y0, inputs).shape[0]
+            n_p = inputs.shape[0]
+            n_z = algebraic(t_eval[0], y0, inputs).shape[0]
             #     y_alg = casadi.MX.sym("y_alg", algebraic(t_eval[0], y0, p).shape[0])
             #     y_full = casadi.vertcat(y_diff, y_alg)
             #     problem.update(
@@ -392,9 +392,9 @@ class ImplicitRandauSolver(pybamm.BaseSolver):
             #         }
 
             # Declare variables
-            x = SX.sym("x", nx)  # state
-            p = SX.sym("u", np)  # control
-            z = SX.sym("z", nz)  # algeb state
+            x = casadi.SX.sym("x", n_x)  # state
+            p = casadi.SX.sym("u", n_p)  # control
+            z = casadi.SX.sym("z", n_z)  # algeb state
 
             ode = rhs(
                 t_eval[0], y0, p
@@ -402,8 +402,8 @@ class ImplicitRandauSolver(pybamm.BaseSolver):
             alg = algebraic(t_eval[0], y0, p)  # vertcat(z[0]**2+x[1]**2-1)
 
             dae = {"x": x, "z": z, "p": p, "ode": ode, "alg": alg}
-            fx = Function("fx", [x, z, p], [ode])
-            fz = Function("fz", [x, z, p], [alg])
+            fx = casadi.Function("fx", [x, z, p], [ode])
+            fz = casadi.Function("fz", [x, z, p], [alg])
 
             # 0 = fA(x, z, p, t) at all times by means of the implicit function theorem,
             # implying in particular that ∂fA/∂z must be invertible.
@@ -412,16 +412,16 @@ class ImplicitRandauSolver(pybamm.BaseSolver):
             d = 4
 
             # Choose collocation points "radau"
-            tau_root = [0] + collocation_points(d, "legendre")
+            tau_root = [0] + casadi.collocation_points(d, "legendre")
 
             # Coefficients of the collocation equation
-            C = N.zeros((d + 1, d + 1))
+            C = np.zeros((d + 1, d + 1))
 
             # Coefficients of the continuity equation
-            D = N.zeros(d + 1)
+            D = np.zeros(d + 1)
 
             # Dimensionless time inside one control interval
-            tau = SX.sym("tau")
+            tau = casadi.SX.sym("tau")
 
             # For all collocation points
             for j in range(d + 1):
@@ -432,147 +432,241 @@ class ImplicitRandauSolver(pybamm.BaseSolver):
                         L *= (tau - tau_root[r]) / (tau_root[j] - tau_root[r])
 
             # Evaluate the polynomial at the final time to get the coefficients of the continuity equation
-            lfcn = Function("lfcn", [tau], [L])
+            lfcn = casadi.Function("lfcn", [tau], [L])
             D[j] = lfcn(1.0)
 
             # Evaluate the time derivative of the polynomial at all collocation points to get the coefficients of the continuity equation
-            tfcn = Function("tfcn", [tau], [tangent(L, tau)])
+            tfcn = casadi.Function("tfcn", [tau], [casadi.tangent(L, tau)])
             for r in range(d + 1):
                 C[j, r] = tfcn(tau_root[r])
 
+
+
             # Total number of variables for one finite element
-            X0 = MX.sym("X0", nx)
+            X0 = casadi.MX.sym("X0", n_x)
             # Z0 = MX.sym('Z0',nz)
-            Z0_guess = MX.sym("Z0", nz)
+            Z0_guess = casadi.MX.sym("Z0", n_z)
             # XZ0=MX.sym('XZ0',nx+nz)
             # X0=XZ0[0:nx]
             # Z0=XZ0[nx:(nx+nz)]
 
-            P = MX.sym("P", np)
-            V = MX.sym("V", (d * nx + (d + 1) * nz))
-            Vx = V[0 : d * nx]  # MX.sym('Vz',d*nx)
-            # add initial guess for z0 here..
-            Vz = V[d * nx : (d * nx + (d + 1) * nz)]  # MX.sym('Vz',nz)
+            P = casadi.MX.sym("P", n_p)
+            V = casadi.MX.sym("V", (d * n_x + (d + 1) * n_z))
+            Vx = V[0 : d * n_x]  # MX.sym('Vz',d*nx)
 
-            # Get the state at each collocation point
-            X = [X0] + vertsplit(Vx, [r * nx for r in range(d + 1)])
-            # Z= [Z0] + vertsplit(Vz,[r*nz for r in range(d+1)])
-            Z = vertsplit(Vz, [r * nz for r in range(d + 2)])
+            if algebraic(t_eval[0], y0, p).is_empty():
+                    # Get the state at each collocation point
+                X = [X0] + casadi.vertsplit(Vx, [r * n_x for r in range(d + 1)])
 
-            #
-            # if nz == 1:
-            #   Z = [Z0] + [Vz]
-            # else:
-            #   Z= [Z0] + Vz
+                # Get the collocation equations (that define V)
+                V_eq = []
+                for j in range(1, d + 1):
+                    # Expression for the state derivative at the collocation point
+                    xp_j = 0
+                    #  zp_j = 0
+                    for r in range(d + 1):
+                        xp_j += C[r, j] * X[r]
+                    #  zp_j += C[r,j]*Z[r]
+                    # Append collocation equations
+                    f_j = fx(X[j], Z[j], P)
+                    V_eq.append(h * f_j - xp_j)
 
-            # Get the collocation equations (that define V)
-            V_eq = []
-            for j in range(1, d + 1):
-                # Expression for the state derivative at the collocation point
-                xp_j = 0
-                #  zp_j = 0
+                # Concatenate constraints
+                V_eq = casadi.vertcat(*V_eq)
+
+                # Root-finding function, implicitly defines V as a function of X0 and P
+                vfcn = casadi.Function("vfcn", [V, X0, P], [V_eq])
+                # vfcn = Function('vfcn', [V, X0,Z0_guess,P], [V_eq])
+
+                # Convert to SX to decrease overhead
+                vfcn_sx = vfcn.expand()
+
+                opts = {}
+                opts["max_iter"] = 1000
+                # opts['reltol']=1e-6
+                opts["abstol"] = 1e-7
+                # Create a implicit function instance to solve the system of equations
+                ifcn = casadi.rootfinder("ifcn", "fast_newton", vfcn_sx, opts)
+                init_guess = casadi.MX.zeros(d * n_x + (d + 1) * n_z, 1)
+                V = ifcn(init_guess, X0, P)
+                # X = [X0 if r==0 else V[(r-1)*nx:r*nx] for r in range(d+1)]
+
+                X = [X0 if r == 0 else V[(r - 1) * (n_x) : r * n_x] for r in range(d + 1)]
+
+                # Get an expression for the state at the end of the finie element
+                XF = 0
+
                 for r in range(d + 1):
-                    xp_j += C[r, j] * X[r]
-                #  zp_j += C[r,j]*Z[r]
-                # Append collocation equations
-                f_j = fx(X[j], Z[j], P)
-                V_eq.append(h * f_j - xp_j)
+                    XF += D[r] * X[r]
 
-            for j in range(d + 1):
-                # Append algebraic constraints
-                # fz_j=fz(X[j],Z[j],P)
-                V_eq.append(fz(X[j], Z[j], P))
-            # add inital constraint for Z0
-            # V_eq.append(fz(X0, Z0, P))
-            # Concatenate constraints
-            V_eq = vertcat(*V_eq)
 
-            # Root-finding function, implicitly defines V as a function of X0 and P
+                # Get the discrete time dynamics
+                # F = Function('F', [X0,P],[XF,ZF,Z0])
+                F = casadi.Function(
+                    "F", [X0, P], [XF]
+                )  #
 
-            vfcn = Function("vfcn", [V, X0, P], [V_eq])
-            # vfcn = Function('vfcn', [V, X0,Z0_guess,P], [V_eq])
+                # Do this iteratively for all finite elements
+                # # change back for symbolic eval of integrator
+                Xs = casadi.MX(n_x, n)
+                Zs= casadi.MX(n_z, n)
+                Xs[:, 0] = X0
 
-            # Convert to SX to decrease overhead
-            vfcn_sx = vfcn.expand()
 
-            opts = {}
-            opts["max_iter"] = 1000
-            # opts['reltol']=1e-6
-            opts["abstol"] = 1e-7
-            # Create a implicit function instance to solve the system of equations
-            ifcn = rootfinder("ifcn", "fast_newton", vfcn_sx, opts)
-            init_guess = MX.zeros(d * nx + (d + 1) * nz, 1)
-            init_guess[d * nx : (d * nx + nz)] = Z0_guess
-            V = ifcn(init_guess, X0, P)
-            # X = [X0 if r==0 else V[(r-1)*nx:r*nx] for r in range(d+1)]
+                for i in range(n - 1):
+                    XZ = F(Xs[:, i],  P)
+                    Xs[:, i + 1] = XZ[0]
 
-            X = [X0 if r == 0 else V[(r - 1) * (nx) : r * nx] for r in range(d + 1)]
-            # Z= [Z0 if r==0 else V[(d*nx+(r-1)*(nz)):(d*nx+r*nz)] for r in range(d+1)]
-            Z = [
-                V[(d * nx + (r) * (nz)) : (d * nx + (r + 1) * nz)] for r in range(d + 1)
-            ]
-            Z0 = Z[0]
-            # Get an expression for the state at the end of the finie element
-            XF = 0
-            ZF = 0
-            for r in range(d + 1):
-                XF += D[r] * X[r]
-                ZF += D[r] * Z[r]
+                ts = np.linspace(0, tf, n)
+                # #integrator = integrator('integrator', 'cvodes', dae, {'grid':ts, 'output_t0':True})
+                # mirk_integrator = Function('mirk_integrator', {'x0':X0, 'z0':Z0, 'p':P, 'xf':X},
+                #                           integrator_in(), integrator_out())
 
-            # Get the discrete time dynamics
-            # F = Function('F', [X0,P],[XF,ZF,Z0])
-            F = Function(
-                "F", [X0, Z0_guess, P], [XF, ZF, Z0, Z[0], X[0], Z[1], X[1]]
-            )  #
+                irk_integrator = casadi.Function(
+                    "irk_integrator",
+                    {"x0": X0, "z0": Z0_guess, "p": P, "xf": Xs, "zf": Zs},
+                    casadi.integrator_in(),
+                    casadi.integrator_out(),
+                )
 
-            # Do this iteratively for all finite elements
-            # # change back for symbolic eval of integrator
-            Xs = MX(nx, n)
-            Zs = MX(nz, n)
-            Xs[:, 0] = X0
-            Zs[:, 0] = Z0_guess
+                method = "irk_integrator"
+                y_alg = casadi.MX.sym("y_alg", algebraic(t_eval[0], y0, p).shape[0])
+                y_full = casadi.vertcat(Xs, Zs)
+                problem.update(
+                    {
+                        "z": y_alg,
+                        "ode": rhs(t, y_full, p),
+                        "alg": algebraic(t, y_full, p),
+                        "xf": Xs,
+                        "zf": Zs,
+                    }
+                )
 
-            for i in range(n - 1):
-                XZ = F(Xs[:, i], Zs[:, i], P)
-                if i == 0:
-                    Zs[:, 0] = XZ[2]  # update inital guess for algebraic state.
-                Xs[:, i + 1] = XZ[0]
-                Zs[:, i + 1] = XZ[1]
-            # and return all values
+            else:
 
-            # Test values
-            x0_val = N.array([1, 0])
+                # add initial guess for z0 here..
+                Vz = V[d * n_x : (d * n_x + (d + 1) * n_z)]  # MX.sym('Vz',nz)
 
-            # x0_val  = N.array([1,0])
-            # x0_val  = N.array([3])
-            z0_val = N.array([0])
+                # Get the state at each collocation point
+                X = [X0] + casadi.vertsplit(Vx, [r * n_x for r in range(d + 1)])
+                # Z= [Z0] + vertsplit(Vz,[r*nz for r in range(d+1)])
+                Z = casadi.vertsplit(Vz, [r * n_z for r in range(d + 2)])
 
-            p_val = 0.2
+                #
+                # if nz == 1:
+                #   Z = [Z0] + [Vz]
+                # else:
+                #   Z= [Z0] + Vz
 
-            ts = N.linspace(0, tf, n)
-            # #integrator = integrator('integrator', 'cvodes', dae, {'grid':ts, 'output_t0':True})
-            # mirk_integrator = Function('mirk_integrator', {'x0':X0, 'z0':Z0, 'p':P, 'xf':X},
-            #                           integrator_in(), integrator_out())
+                # Get the collocation equations (that define V)
+                V_eq = []
+                for j in range(1, d + 1):
+                    # Expression for the state derivative at the collocation point
+                    xp_j = 0
+                    #  zp_j = 0
+                    for r in range(d + 1):
+                        xp_j += C[r, j] * X[r]
+                    #  zp_j += C[r,j]*Z[r]
+                    # Append collocation equations
+                    f_j = fx(X[j], Z[j], P)
+                    V_eq.append(h * f_j - xp_j)
 
-            irk_integrator = Function(
-                "irk_integrator",
-                {"x0": X0, "z0": Z0_guess, "p": P, "xf": Xs, "zf": Zs},
-                integrator_in(),
-                integrator_out(),
-            )
+                for j in range(d + 1):
+                    # Append algebraic constraints
+                    # fz_j=fz(X[j],Z[j],P)
+                    V_eq.append(fz(X[j], Z[j], P))
 
-            method = "irk_integrator"
-            y_alg = casadi.MX.sym("y_alg", algebraic(t_eval[0], y0, p).shape[0])
-            y_full = casadi.vertcat(Xs, Zs)
-            problem.update(
-                {
-                    "z": y_alg,
-                    "ode": rhs(t, y_full, p),
-                    "alg": algebraic(t, y_full, p),
-                    "xf": Xs,
-                    "zf": Zs,
-                }
-            )
+                # add inital constraint for Z0
+                # V_eq.append(fz(X0, Z0, P))
+                # Concatenate constraints
+                V_eq = casadi.vertcat(*V_eq)
+
+                # Root-finding function, implicitly defines V as a function of X0 and P
+
+                vfcn = casadi.Function("vfcn", [V, X0, P], [V_eq])
+                # vfcn = Function('vfcn', [V, X0,Z0_guess,P], [V_eq])
+
+                # Convert to SX to decrease overhead
+                vfcn_sx = vfcn.expand()
+
+                opts = {}
+                opts["max_iter"] = 1000
+                # opts['reltol']=1e-6
+                opts["abstol"] = 1e-7
+                # Create a implicit function instance to solve the system of equations
+                ifcn = casadi.rootfinder("ifcn", "fast_newton", vfcn_sx, opts)
+                init_guess = casadi.MX.zeros(d * n_x + (d + 1) * n_z, 1)
+                init_guess[d * n_x : (d * n_x + n_z)] = Z0_guess
+                V = ifcn(init_guess, X0, P)
+                # X = [X0 if r==0 else V[(r-1)*nx:r*nx] for r in range(d+1)]
+
+                X = [X0 if r == 0 else V[(r - 1) * (n_x) : r * n_x] for r in range(d + 1)]
+                # Z= [Z0 if r==0 else V[(d*nx+(r-1)*(nz)):(d*nx+r*nz)] for r in range(d+1)]
+                Z = [
+                    V[(d * n_x + (r) * (n_z)) : (d * n_x + (r + 1) * n_z)] for r in range(d + 1)
+                ]
+                Z0 = Z[0]
+                # Get an expression for the state at the end of the finie element
+                XF = 0
+                ZF = 0
+                for r in range(d + 1):
+                    XF += D[r] * X[r]
+                    ZF += D[r] * Z[r]
+
+                # Get the discrete time dynamics
+                # F = Function('F', [X0,P],[XF,ZF,Z0])
+                F = casadi.Function(
+                    "F", [X0, Z0_guess, P], [XF, ZF, Z0, Z[0], X[0], Z[1], X[1]]
+                )  #
+
+                # Do this iteratively for all finite elements
+                # # change back for symbolic eval of integrator
+                Xs = casadi.MX(n_x, n)
+                Zs = casadi.MX(n_z, n)
+                Xs[:, 0] = X0
+                Zs[:, 0] = Z0_guess
+
+                for i in range(n - 1):
+                    XZ = F(Xs[:, i], Zs[:, i], P)
+                    if i == 0:
+                        Zs[:, 0] = XZ[2]  # update inital guess for algebraic state.
+                    Xs[:, i + 1] = XZ[0]
+                    Zs[:, i + 1] = XZ[1]
+                # and return all values
+
+                # # Test values
+                # x0_val = np.array([1, 0])
+
+                # # x0_val  = np.array([1,0])
+                # # x0_val  = np.array([3])
+                # z0_val = np.array([0])
+
+                # p_val = 0.2
+
+                ts = np.linspace(0, tf, n)
+                # #integrator = integrator('integrator', 'cvodes', dae, {'grid':ts, 'output_t0':True})
+                # mirk_integrator = Function('mirk_integrator', {'x0':X0, 'z0':Z0, 'p':P, 'xf':X},
+                #                           integrator_in(), integrator_out())
+
+                irk_integrator = casadi.Function(
+                    "irk_integrator",
+                    {"x0": X0, "z0": Z0_guess, "p": P, "xf": Xs, "zf": Zs},
+                    casadi.integrator_in(),
+                    casadi.integrator_out(),
+                )
+
+                method = "irk_integrator"
+                y_alg = casadi.MX.sym("y_alg", algebraic(t_eval[0], y0, p).shape[0])
+                y_full = casadi.vertcat(Xs, Zs)
+                problem.update(
+                    {
+                        "z": y_alg,
+                        "ode": rhs(t, y_full, p),
+                        "alg": algebraic(t, y_full, p),
+                        "xf": Xs,
+                        "zf": Zs,
+                    }
+                )
 
             # if algebraic(t_eval[0], y0, p).is_empty():
             #     method = "cvodes"
