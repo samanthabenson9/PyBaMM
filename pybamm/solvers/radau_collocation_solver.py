@@ -397,9 +397,9 @@ class ImplicitRandauSolver(pybamm.BaseSolver):
             z = casadi.SX.sym("z", n_z)  # algeb state
 
             ode = rhs(
-                t_eval[0], y0, p
+                t_eval[0], casadi.vertcat(x,z), p
             )  # vertcat(0.7*x[1]+sin(2.5*z[0]),1.4*x[0]+cos(2.5*z[0]))
-            alg = algebraic(t_eval[0], y0, p)  # vertcat(z[0]**2+x[1]**2-1)
+            alg = algebraic(t_eval[0], casadi.vertcat(x,z), p)  # vertcat(z[0]**2+x[1]**2-1)
 
             dae = {"x": x, "z": z, "p": p, "ode": ode, "alg": alg}
             fx = casadi.Function("fx", [x, z, p], [ode])
@@ -468,7 +468,7 @@ class ImplicitRandauSolver(pybamm.BaseSolver):
                         xp_j += C[r, j] * X[r]
                     #  zp_j += C[r,j]*Z[r]
                     # Append collocation equations
-                    f_j = fx(X[j], Z[j], P)
+                    f_j = fx(X[j], Z0_guess, P)
                     V_eq.append(h * f_j - xp_j)
 
                 # Concatenate constraints
