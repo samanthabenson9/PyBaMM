@@ -454,7 +454,7 @@ class ImplicitRandauSolver(pybamm.BaseSolver):
             V = casadi.MX.sym("V", (d * n_x + (d + 1) * n_z))
             Vx = V[0 : d * n_x]  # MX.sym('Vz',d*nx)
 
-            if algebraic(t_eval[0], y0, p).is_empty():
+            if algebraic(t_eval[0], y0, pp).is_empty():
                     # Get the state at each collocation point
                 X = [X0] + casadi.vertsplit(Vx, [r * n_x for r in range(d + 1)])
 
@@ -531,9 +531,15 @@ class ImplicitRandauSolver(pybamm.BaseSolver):
                 # mirk_integrator = Function('mirk_integrator', {'x0':X0, 'z0':Z0, 'p':P, 'xf':X},
                 #                           integrator_in(), integrator_out())
 
+                # irk_integrator = casadi.Function(
+                #     "irk_integrator_ODE",
+                #     {"x0": X0, "p": P, "xf": Xs,},
+                #     casadi.integrator_in(),
+                #     casadi.integrator_out(),
+                # )
                 irk_integrator = casadi.Function(
-                    "irk_integrator_ODE",
-                    {"x0": X0, "p": P, "xf": Xs,},
+                    "irk_integrator",
+                    {"x0": X0, "z0": Z0_guess, "p": P, "xf": Xs, "zf": Zs},
                     casadi.integrator_in(),
                     casadi.integrator_out(),
                 )
