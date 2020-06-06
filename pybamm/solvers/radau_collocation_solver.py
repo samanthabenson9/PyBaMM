@@ -366,17 +366,17 @@ class ImplicitRandauSolver(pybamm.BaseSolver):
             }
 
             # set up and solve
-            # t = casadi.MX.sym("t")
-            # p = casadi.MX.sym("p", inputs.shape[0])
-            # y_diff = casadi.MX.sym("y_diff", rhs(t_eval[0], y0, p).shape[0])
-            # problem = {"t": t, "x": y_diff, "p": p}
+            t = casadi.MX.sym("t")
+            pp = casadi.MX.sym("p", inputs.shape[0])
+            y_diff = casadi.MX.sym("y_diff", rhs(t_eval[0], y0, pp).shape[0])
+            problem = {"t": t, "x": y_diff, "p": pp}
 
             # End time
             tf = t_eval[-1]
             # Number of finite elements
             n = t_eval.shape[0] # siegeljb 6/3/2020, this is off by 1, need to fix eventually.
             # Size of the finite elements
-            h = tf / n
+            h = tf / (n-1) #this should work, but need to verify.
 
             # Dimensions
             n_x = rhs(t_eval[0], y0, inputs).shape[0]
@@ -458,6 +458,15 @@ class ImplicitRandauSolver(pybamm.BaseSolver):
                     # Get the state at each collocation point
                 X = [X0] + casadi.vertsplit(Vx, [r * n_x for r in range(d + 1)])
 
+
+                ode = rhs(
+                    t_eval[0], x, p
+                )  # vertcat(0.7*x[1]+sin(2.5*z[0]),1.4*x[0]+cos(2.5*z[0]))
+
+                fx = casadi.Function("fx", [x, p], [ode])
+
+
+
                 # Get the collocation equations (that define V)
                 V_eq = []
                 for j in range(1, d + 1):
@@ -468,7 +477,7 @@ class ImplicitRandauSolver(pybamm.BaseSolver):
                         xp_j += C[r, j] * X[r]
                     #  zp_j += C[r,j]*Z[r]
                     # Append collocation equations
-                    f_j = fx(X[j], Z0_guess, P)
+                    f_j = fx(X[j], P)
                     V_eq.append(h * f_j - xp_j)
 
                 # Concatenate constraints
@@ -487,7 +496,7 @@ class ImplicitRandauSolver(pybamm.BaseSolver):
                 opts["abstol"] = 1e-7
                 # Create a implicit function instance to solve the system of equations
                 ifcn = casadi.rootfinder("ifcn", "fast_newton", vfcn_sx, opts)
-                init_guess = casadi.MX.zeros(d * n_x + (d + 1) * n_z, 1)
+                init_guess = casadi.MX.zeros(d * n_x , 1)
                 V = ifcn(init_guess, X0, P)
                 # X = [X0 if r==0 else V[(r-1)*nx:r*nx] for r in range(d+1)]
 
@@ -509,7 +518,7 @@ class ImplicitRandauSolver(pybamm.BaseSolver):
                 # Do this iteratively for all finite elements
                 # # change back for symbolic eval of integrator
                 Xs = casadi.MX(n_x, n)
-                Zs= casadi.MX(n_z, n)
+                Zs = casadi.MX(n_z, n)
                 Xs[:, 0] = X0
 
 
@@ -517,28 +526,26 @@ class ImplicitRandauSolver(pybamm.BaseSolver):
                     XZ = F(Xs[:, i],  P)
                     Xs[:, i + 1] = XZ[0]
 
-                ts = np.linspace(0, tf, n)
+                # ts = np.linspace(0, tf, n)
                 # #integrator = integrator('integrator', 'cvodes', dae, {'grid':ts, 'output_t0':True})
                 # mirk_integrator = Function('mirk_integrator', {'x0':X0, 'z0':Z0, 'p':P, 'xf':X},
                 #                           integrator_in(), integrator_out())
 
                 irk_integrator = casadi.Function(
-                    "irk_integrator",
-                    {"x0": X0, "z0": Z0_guess, "p": P, "xf": Xs, "zf": Zs},
+                    "irk_integrator_ODE",
+                    {"x0": X0, "p": P, "xf": Xs,},
                     casadi.integrator_in(),
                     casadi.integrator_out(),
                 )
 
-                method = "irk_integrator"
-                y_alg = casadi.MX.sym("y_alg", algebraic(t_eval[0], y0, p).shape[0])
+                method = "irk_integrator_ODE"
+                y_alg = casadi.MX.sym("y_alg", algebraic(t_eval[0], y0, pp).shape[0])
                 y_full = casadi.vertcat(Xs, Zs)
                 problem.update(
                     {
-                        "z": y_alg,
-                        "ode": rhs(t, y_full, p),
-                        "alg": algebraic(t, y_full, p),
+                        "ode": rhs(t, y_diff, pp),      
                         "xf": Xs,
-                        "zf": Zs,
+                        #"zf": Zs,
                     }
                 )
 
@@ -656,15 +663,17 @@ class ImplicitRandauSolver(pybamm.BaseSolver):
                 )
 
                 method = "irk_integrator"
-                y_alg = casadi.MX.sym("y_alg", algebraic(t_eval[0], y0, p).shape[0])
-                y_full = casadi.vertcat(Xs, Zs)
+                y_alg = casadi.MX.sym("y_alg", algebraic(t_eval[0], y0, pp).shape[0])
+                #y_full = casadi.vertcat(Xs, Zs)
+                y_full = casadi.vertcat(y_diff, y_alg)
                 problem.update(
                     {
                         "z": y_alg,
-                        "ode": rhs(t, y_full, p),
-                        "alg": algebraic(t, y_full, p),
+                        "ode": rhs(t, y_full, pp),
+                        "alg": algebraic(t, y_full, pp),
                         "xf": Xs,
                         "zf": Zs,
+                        "p" : P,
                     }
                 )
 
