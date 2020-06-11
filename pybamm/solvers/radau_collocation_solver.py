@@ -362,18 +362,19 @@ class ImplicitRandauSolver(pybamm.BaseSolver):
         x = casadi.SX.sym("x", n_x)  # state
         p = casadi.SX.sym("u", n_p)  # control
         z = casadi.SX.sym("z", n_z)  # algeb state
+        t = casadi.SX.sym("t")  # time.
 # declare a time variable here... todo.
         yfull=casadi.vertcat(x, z)
 
         ode = rhs(
-            t_eval[0], yfull, p
+            t, yfull, p
         )  # vertcat(0.7*x[1]+sin(2.5*z[0]),1.4*x[0]+cos(2.5*z[0]))
         alg = algebraic(
-            t_eval[0], yfull, p
+            t, yfull, p
         )  # vertcat(z[0]**2+x[1]**2-1)
 
-        fx = casadi.Function("fx", [x, z, p], [ode])
-        fz = casadi.Function("fz", [x, z, p], [alg])
+        fx = casadi.Function("fx", [x, z, p, t], [ode])
+        fz = casadi.Function("fz", [x, z, p, t], [alg])
 
         
 
@@ -456,7 +457,7 @@ class ImplicitRandauSolver(pybamm.BaseSolver):
             # dae = {"x": x, "p": p, "ode": ode}
             # f = casadi.Function("f", [x, p], [ode])
 
-            f = casadi.Function("f", [x, p], [ode])
+            f = casadi.Function("f", [x, p, t], [ode])
          
 
             # # Number of finite elements
@@ -500,6 +501,7 @@ class ImplicitRandauSolver(pybamm.BaseSolver):
             # Total number of variables for one finite element
             X0 = casadi.MX.sym("X0", n_x)
             P = casadi.MX.sym("P", n_p)
+            T = casadi.MX.sym("T")
             V = casadi.MX.sym("V", d * n_x)
 
             # Get the state at each collocation point
@@ -514,14 +516,14 @@ class ImplicitRandauSolver(pybamm.BaseSolver):
                     xp_j += C[r, j] * X[r]
 
                 # Append collocation equations
-                f_j = f(X[j], P)
+                f_j = f(X[j], P,T)
                 V_eq.append(h * f_j - xp_j)
 
             # Concatenate constraints
             V_eq = casadi.vertcat(*V_eq)
 
             # Root-finding function, implicitly defines V as a function of X0 and P
-            vfcn = casadi.Function("vfcn", [V, X0, P], [V_eq])
+            vfcn = casadi.Function("vfcn", [V, X0, P,T], [V_eq])
 
             # Convert to SX to decrease overhead
             vfcn_sx = vfcn.expand()
@@ -535,7 +537,7 @@ class ImplicitRandauSolver(pybamm.BaseSolver):
             # Create a implicit function instance to solve the system of equations
             ifcn = casadi.rootfinder("ifcn", "fast_newton", vfcn_sx, opts)
 
-            V = ifcn(casadi.MX(), X0, P)
+            V = ifcn(casadi.MX(), X0, P,T)
             X = [X0 if r == 0 else V[(r - 1) * n_x : r * n_x] for r in range(d + 1)]
 
             # Get an expression for the state at the end of the finie element
@@ -544,7 +546,7 @@ class ImplicitRandauSolver(pybamm.BaseSolver):
                 XF += D[r] * X[r]
 
             # Get the discrete time dynamics
-            F = casadi.Function("F", [X0, P], [XF])
+            F = casadi.Function("F", [X0, P, T], [XF])
 
             # Do this iteratively for all finite elements
             Xs = casadi.MX(n_x, n)
@@ -555,11 +557,11 @@ class ImplicitRandauSolver(pybamm.BaseSolver):
             # ts[0]=0
             
             for i in range(0,n-1):
-                X = F(X, P)
-                XZ = F(Xs[:, i], P)
+                X = F(X, P,t_eval[i])
+                XZ = F(Xs[:, i], P,t_eval[i])
                 Xs[:, i + 1] = XZ[0]
-                ts[i+1]
-            X = F(X, P)
+                #ts[i+1]
+            X = F(X, P,tf)
 
             # Fixed-step integrator
             irk_integrator = casadi.Function(
