@@ -359,19 +359,23 @@ class ImplicitRandauSolver(pybamm.BaseSolver):
         n_z = algebraic(t_eval[0], y0, inputs).shape[0]
 
         # Declare variables
-        x = casadi.SX.sym("x", n_x)  # state
-        p = casadi.SX.sym("u", n_p)  # control
-        z = casadi.SX.sym("z", n_z)  # algeb state
+        x = casadi.MX.sym("x", n_x)  # state
+        p = casadi.MX.sym("u", n_p)  # control
+        z = casadi.MX.sym("z", n_z)  # algeb state
+# declare a time variable here... todo.
+        yfull=casadi.vertcat(x, z)
 
         ode = rhs(
-            t_eval[0], casadi.vertcat(x, z), p
+            t_eval[0], yfull, p
         )  # vertcat(0.7*x[1]+sin(2.5*z[0]),1.4*x[0]+cos(2.5*z[0]))
         alg = algebraic(
-            t_eval[0], casadi.vertcat(x, z), p
+            t_eval[0], yfull, p
         )  # vertcat(z[0]**2+x[1]**2-1)
 
         fx = casadi.Function("fx", [x, z, p], [ode])
         fz = casadi.Function("fz", [x, z, p], [alg])
+
+        
 
         # 0 = fA(x, z, p, t) at all times by means of the implicit function theorem,
         # implying in particular that ∂fA/∂z must be invertible.
@@ -424,6 +428,9 @@ class ImplicitRandauSolver(pybamm.BaseSolver):
         Vx = V[0 : d * n_x]  # MX.sym('Vz',d*nx)
 
         if algebraic(t_eval[0], y0, pp).is_empty():
+
+            
+
             # Get the state at each collocation point
             X = [X0] + casadi.vertsplit(Vx, [r * n_x for r in range(d + 1)])
 
@@ -431,7 +438,8 @@ class ImplicitRandauSolver(pybamm.BaseSolver):
                 t_eval[0], x, p
             )  # vertcat(0.7*x[1]+sin(2.5*z[0]),1.4*x[0]+cos(2.5*z[0]))
 
-            fx = casadi.Function("fx", [x, p], [ode])
+            #fx = casadi.Function("fx", [x, p], [ode])
+            fx = casadi.Function("fx", [x, p], [0.1*x[0]])
 
             # Get the collocation equations (that define V)
             V_eq = []
