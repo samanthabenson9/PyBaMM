@@ -388,7 +388,7 @@ class ImplicitRandauSolver(pybamm.BaseSolver):
         # h = tf / n
 
         # Degree of interpolating polynomial
-        d = 4
+        d = 5
 
         # Choose collocation points
         tau_root = [0] + casadi.collocation_points(d, "legendre")
@@ -426,7 +426,7 @@ class ImplicitRandauSolver(pybamm.BaseSolver):
         # XZ0=MX.sym('XZ0',nx+nz)
         # X0=XZ0[0:nx]
         # Z0=XZ0[nx:(nx+nz)]
-
+        T = casadi.MX.sym("T")
         P = casadi.MX.sym("P", n_p)
         V = casadi.MX.sym("V", (d * n_x + (d + 1) * n_z))
         Vx = V[0 : d * n_x]  # MX.sym('Vz',d*nx)
@@ -531,9 +531,9 @@ class ImplicitRandauSolver(pybamm.BaseSolver):
             # Create a implicit function instance to solve the system of equations
             # ifcn = casadi.rootfinder("ifcn", "fast_newton", vfcn_sx)
             opts = {}
-            opts["max_iter"] = 1000
+            opts["max_iter"] = 5000
             # opts['reltol']=1e-6
-            opts["abstol"] = 1e-7
+            opts["abstol"] = 1e-8
             # Create a implicit function instance to solve the system of equations
             ifcn = casadi.rootfinder("ifcn", "fast_newton", vfcn_sx, opts)
 
@@ -602,13 +602,13 @@ class ImplicitRandauSolver(pybamm.BaseSolver):
                     xp_j += C[r, j] * X[r]
                 #  zp_j += C[r,j]*Z[r]
                 # Append collocation equations
-                f_j = fx(X[j], Z[j], P)
+                f_j = fx(X[j], Z[j], P,T)
                 V_eq.append(h * f_j - xp_j)
 
             for j in range(d + 1):
                 # Append algebraic constraints
                 # fz_j=fz(X[j],Z[j],P)
-                V_eq.append(fz(X[j], Z[j], P))
+                V_eq.append(fz(X[j], Z[j], P,T))
 
             # add inital constraint for Z0
             # V_eq.append(fz(X0, Z0, P))
@@ -617,21 +617,21 @@ class ImplicitRandauSolver(pybamm.BaseSolver):
 
             # Root-finding function, implicitly defines V as a function of X0 and P
 
-            vfcn = casadi.Function("vfcn", [V, X0, P], [V_eq])
+            vfcn = casadi.Function("vfcn", [V, X0, P, T], [V_eq])
             # vfcn = Function('vfcn', [V, X0,Z0_guess,P], [V_eq])
 
             # Convert to SX to decrease overhead
             vfcn_sx = vfcn.expand()
 
             opts = {}
-            opts["max_iter"] = 1000
+            opts["max_iter"] = 5000
             # opts['reltol']=1e-6
-            opts["abstol"] = 1e-7
+            opts["abstol"] = 1e-8
             # Create a implicit function instance to solve the system of equations
             ifcn = casadi.rootfinder("ifcn", "fast_newton", vfcn_sx, opts)
             init_guess = casadi.MX.zeros(d * n_x + (d + 1) * n_z, 1)
             init_guess[d * n_x : (d * n_x + n_z)] = Z0_guess
-            V = ifcn(init_guess, X0, P)
+            V = ifcn(init_guess, X0, P,T)
             # X = [X0 if r==0 else V[(r-1)*nx:r*nx] for r in range(d+1)]
 
             X = [X0 if r == 0 else V[(r - 1) * (n_x) : r * n_x] for r in range(d + 1)]
@@ -651,7 +651,7 @@ class ImplicitRandauSolver(pybamm.BaseSolver):
             # Get the discrete time dynamics
             # F = Function('F', [X0,P],[XF,ZF,Z0])
             F = casadi.Function(
-                "F", [X0, Z0_guess, P], [XF, ZF, Z0] #
+                "F", [X0, Z0_guess, P,T], [XF, ZF, Z0] #
             )  #
 
             # Do this iteratively for all finite elements
@@ -662,7 +662,7 @@ class ImplicitRandauSolver(pybamm.BaseSolver):
             Zs[:, 0] = Z0_guess
 
             for i in range(n - 1):
-                XZ = F(Xs[:, i], Zs[:, i], P)
+                XZ = F(Xs[:, i], Zs[:, i], P,t_eval[i])
                 if i == 0:
                     Zs[:, 0] = XZ[2]  # update inital guess for algebraic state.
                 Xs[:, i + 1] = XZ[0]
