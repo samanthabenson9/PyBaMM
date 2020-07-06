@@ -30,7 +30,7 @@ class TestRandauSolver(unittest.TestCase):
         solution = solver.solve(model_disc, t_eval)
         np.testing.assert_array_equal(solution.t, t_eval)
         np.testing.assert_array_almost_equal(
-            solution.y[0], np.exp(0.1 * solution.t), decimal=5
+            solution.y[0], np.exp(0.1 * solution.t), decimal=4
         )
 
         # # Safe mode (enforce events that won't be triggered)
@@ -63,7 +63,7 @@ class TestRandauSolver(unittest.TestCase):
         solution = solver.solve(model, t_eval)
         np.testing.assert_array_equal(solution.t, t_eval)
         np.testing.assert_array_almost_equal(
-            solution.y[0], np.exp(0.1 * solution.t), decimal=5
+            solution.y[0], np.exp(0.1 * solution.t), decimal=4
         )
         pybamm.set_logging_level("WARNING")
 
@@ -321,10 +321,10 @@ class TestRandauSolver(unittest.TestCase):
             model, t_eval, inputs={"rate": -1, "ic 1": 0.1, "ic 2": 2}
         )
         np.testing.assert_array_almost_equal(
-            solution.y[0], 0.1 * np.exp(-solution.t), decimal=5
+            solution.y[0], 0.1 * np.exp(-solution.t), decimal=4
         )
         np.testing.assert_array_almost_equal(
-            solution.y[-1], 0.1 * np.exp(-solution.t), decimal=5
+            solution.y[-1], 0.1 * np.exp(-solution.t), decimal=4
         )
 
         # Solve again with different initial conditions
@@ -332,10 +332,10 @@ class TestRandauSolver(unittest.TestCase):
             model, t_eval, inputs={"rate": -0.1, "ic 1": 1, "ic 2": 3}
         )
         np.testing.assert_array_almost_equal(
-            solution.y[0], 1 * np.exp(-0.1 * solution.t), decimal=5
+            solution.y[0], 1 * np.exp(-0.1 * solution.t), decimal=4
         )
         np.testing.assert_array_almost_equal(
-            solution.y[-1], 1 * np.exp(-0.1 * solution.t), decimal=5
+            solution.y[-1], 1 * np.exp(-0.1 * solution.t), decimal=4
         )
 
     # def test_model_solver_with_external(self):

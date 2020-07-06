@@ -353,7 +353,7 @@ class ImplicitRandauSolver(pybamm.BaseSolver):
         # Size of the finite elements
         h_eval = tf / (n_eval - 1)  # this should work, but need to verify.
 
-        
+        # how can I control the step size for a given error tolerance. siegeljb 7/6/2020
         h=min(1e-4,h_eval) # checking on the time discretization, need a better way.
         n=int(t_eval[-1]//h+1)
 
