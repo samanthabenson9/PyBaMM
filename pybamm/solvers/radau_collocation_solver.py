@@ -354,7 +354,7 @@ class ImplicitRandauSolver(pybamm.BaseSolver):
         h_eval = tf / (n_eval - 1)  # this should work, but need to verify.
 
         
-        h=min(1e-3,h_eval)
+        h=min(1e-4,h_eval) # checking on the time discretization, need a better way.
         n=int(t_eval[-1]//h+1)
 
         # Dimensions
@@ -392,7 +392,7 @@ class ImplicitRandauSolver(pybamm.BaseSolver):
         # h = tf / n
 
         # Degree of interpolating polynomial
-        d = 5
+        d = 4
 
         # Choose collocation points
         tau_root = [0] + casadi.collocation_points(d, "legendre")
@@ -565,15 +565,14 @@ class ImplicitRandauSolver(pybamm.BaseSolver):
             X = X0
             # ts== casadi.MX(1 n)
             # ts[0]=0
-            k=0
+            k=1
             for i in range(0,n-1):
                 XsP=X
                 # X = F(X, P,t_eval[i])
                 X = F(X, P,i*h) #t_eval[k]
                 if(i*h>=k*h_eval):
-                    k=k+1
                     Xs[:, k] = X # should take the weighted average here, rather than the next point TODO siegeljb...
-                #ts[i+1]
+                    k=k+1 #ts[i+1]
             # Take last step and update output
             X = F(X, P,tf)
             Xs[:, -1] = X
@@ -680,7 +679,7 @@ class ImplicitRandauSolver(pybamm.BaseSolver):
             XZ=F(Xss, Zss, P,0)
             Zs[:, 0] = XZ[2]  # update inital guess for algebraic state.
             Zss=Zs[:, 0]
-            k=0
+            k=1
             for i in range(n - 1):
                 XZprev=XZ
                 XZ = F(Xss, Zss, P,i*h)    
@@ -688,9 +687,9 @@ class ImplicitRandauSolver(pybamm.BaseSolver):
                 Xss = XZ[0]
                 Zss = XZ[1]
                 if(i*h>=k*h_eval):
-                    k=k+1
                     Xs[:, k] = Xss
                     Zs[:, k] = Zss
+                    k=k+1
             # and return all values
             XZ = F(Xss, Zss, P,n*h)
             Xss = XZ[0]
