@@ -347,11 +347,15 @@ class ImplicitRandauSolver(pybamm.BaseSolver):
         # End time
         tf = t_eval[-1]
         # Number of finite elements
-        n = t_eval.shape[
+        n_eval = t_eval.shape[
             0
         ]  # siegeljb 6/3/2020, this is off by 1, need to fix eventually.
         # Size of the finite elements
-        h = tf / (n - 1)  # this should work, but need to verify.
+        h_eval = tf / (n_eval - 1)  # this should work, but need to verify.
+
+        
+        h=min(1e-3,h_eval)
+        n=int(t_eval[-1]//h+1)
 
         # Dimensions
         n_x = rhs(t_eval[0], y0, inputs).shape[0]
@@ -549,19 +553,30 @@ class ImplicitRandauSolver(pybamm.BaseSolver):
             F = casadi.Function("F", [X0, P, T], [XF])
 
             # Do this iteratively for all finite elements
-            Xs = casadi.MX(n_x, n)
-            Zs = casadi.MX(n_z, n)
+            # Xs = casadi.MX(n_x, n)
+            # Zs = casadi.MX(n_z, n)
+            Xs = casadi.MX(n_x, n_eval)
+            Zs = casadi.MX(n_z, n_eval)
+            XsP = casadi.MX(n_x, 1)
+            ZsP = casadi.MX(n_z, 1)
+                
+
             Xs[:, 0] = X0
             X = X0
             # ts== casadi.MX(1 n)
             # ts[0]=0
-            
+            k=0
             for i in range(0,n-1):
-                X = F(X, P,t_eval[i])
-                XZ = F(Xs[:, i], P,t_eval[i])
-                Xs[:, i + 1] = XZ[0]
+                XsP=X
+                # X = F(X, P,t_eval[i])
+                X = F(X, P,i*h) #t_eval[k]
+                if(i*h>=k*h_eval):
+                    k=k+1
+                    Xs[:, k] = X # should take the weighted average here, rather than the next point TODO siegeljb...
                 #ts[i+1]
+            # Take last step and update output
             X = F(X, P,tf)
+            Xs[:, -1] = X
 
             # Fixed-step integrator
             irk_integrator = casadi.Function(
@@ -656,19 +671,32 @@ class ImplicitRandauSolver(pybamm.BaseSolver):
 
             # Do this iteratively for all finite elements
             # # change back for symbolic eval of integrator
-            Xs = casadi.MX(n_x, n)
-            Zs = casadi.MX(n_z, n)
+            Xs = casadi.MX(n_x, n_eval)
+            Zs = casadi.MX(n_z, n_eval)
             Xs[:, 0] = X0
             Zs[:, 0] = Z0_guess
-
+            Xss=X0
+            Zss= Z0_guess
+            XZ=F(Xss, Zss, P,0)
+            Zs[:, 0] = XZ[2]  # update inital guess for algebraic state.
+            Zss=Zs[:, 0]
+            k=0
             for i in range(n - 1):
-                XZ = F(Xs[:, i], Zs[:, i], P,t_eval[i])
-                if i == 0:
-                    Zs[:, 0] = XZ[2]  # update inital guess for algebraic state.
-                Xs[:, i + 1] = XZ[0]
-                Zs[:, i + 1] = XZ[1]
-            # and return all values
+                XZprev=XZ
+                XZ = F(Xss, Zss, P,i*h)    
 
+                Xss = XZ[0]
+                Zss = XZ[1]
+                if(i*h>=k*h_eval):
+                    k=k+1
+                    Xs[:, k] = Xss
+                    Zs[:, k] = Zss
+            # and return all values
+            XZ = F(Xss, Zss, P,n*h)
+            Xss = XZ[0]
+            Zss = XZ[1]
+            Xs[:, -1] = Xss
+            Zs[:, -1] = Zss
             # # Test values
             # x0_val = np.array([1, 0])
 

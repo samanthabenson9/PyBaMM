@@ -13,25 +13,25 @@ class TestRandauSolver(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "invalid mode"):
             pybamm.ImplicitRandauSolver(mode="bad mode")
 
-    # def test_model_solver(self):
-    #     # Create model
-    #     model = pybamm.BaseModel()
-    #     var = pybamm.Variable("var")
-    #     model.rhs = {var: 0.1 * var}
-    #     model.initial_conditions = {var: 1}
-    #     # No need to set parameters; can use base discretisation (no spatial operators)
+    def test_model_solver(self):
+        # Create model
+        model = pybamm.BaseModel()
+        var = pybamm.Variable("var")
+        model.rhs = {var: 0.1 * var}
+        model.initial_conditions = {var: 1}
+        # No need to set parameters; can use base discretisation (no spatial operators)
 
-        # # create discretisation
-        # disc = pybamm.Discretisation()
-        # model_disc = disc.process_model(model, inplace=False)
-        # # Solve
-        # solver = pybamm.ImplicitRandauSolver(mode="fast", rtol=1e-8, atol=1e-8)
-        # t_eval = np.linspace(0, .1, 1000)
-        # solution = solver.solve(model_disc, t_eval)
-        # np.testing.assert_array_equal(solution.t, t_eval)
-        # np.testing.assert_array_almost_equal(
-        #     solution.y[0], np.exp(0.1 * solution.t), decimal=5
-        # )
+        # create discretisation
+        disc = pybamm.Discretisation()
+        model_disc = disc.process_model(model, inplace=False)
+        # Solve
+        solver = pybamm.ImplicitRandauSolver(mode="fast", rtol=1e-8, atol=1e-8)
+        t_eval = np.linspace(0, 1, 100)
+        solution = solver.solve(model_disc, t_eval)
+        np.testing.assert_array_equal(solution.t, t_eval)
+        np.testing.assert_array_almost_equal(
+            solution.y[0], np.exp(0.1 * solution.t), decimal=5
+        )
 
         # # Safe mode (enforce events that won't be triggered)
         # model.events = [pybamm.Event("an event", var + 1)]
@@ -44,28 +44,28 @@ class TestRandauSolver(unittest.TestCase):
         #     solution.y[0], np.exp(0.1 * solution.t), decimal=5
         # )
 
-    # def test_model_solver_python(self):
-    #     # Create model
-    #     pybamm.set_logging_level("ERROR")
-    #     model = pybamm.BaseModel()
-    #     model.convert_to_format = "python"
-    #     var = pybamm.Variable("var")
-    #     model.rhs = {var: 0.1 * var}
-    #     model.initial_conditions = {var: 1}
-    #     # No need to set parameters; can use base discretisation (no spatial operators)
+    def test_model_solver_python(self):
+        # Create model
+        pybamm.set_logging_level("ERROR")
+        model = pybamm.BaseModel()
+        model.convert_to_format = "python"
+        var = pybamm.Variable("var")
+        model.rhs = {var: 0.1 * var}
+        model.initial_conditions = {var: 1}
+        # No need to set parameters; can use base discretisation (no spatial operators)
 
-    #     # create discretisation
-    #     disc = pybamm.Discretisation()
-    #     disc.process_model(model)
-    #     # Solve
-    #     solver = pybamm.ImplicitRandauSolver(mode="fast", rtol=1e-8, atol=1e-8)
-    #     t_eval = np.linspace(0, 1, 100)
-    #     solution = solver.solve(model, t_eval)
-    #     np.testing.assert_array_equal(solution.t, t_eval)
-    #     np.testing.assert_array_almost_equal(
-    #         solution.y[0], np.exp(0.1 * solution.t), decimal=5
-    #     )
-    #     pybamm.set_logging_level("WARNING")
+        # create discretisation
+        disc = pybamm.Discretisation()
+        disc.process_model(model)
+        # Solve
+        solver = pybamm.ImplicitRandauSolver(mode="fast", rtol=1e-8, atol=1e-8)
+        t_eval = np.linspace(0, 1, 100)
+        solution = solver.solve(model, t_eval)
+        np.testing.assert_array_equal(solution.t, t_eval)
+        np.testing.assert_array_almost_equal(
+            solution.y[0], np.exp(0.1 * solution.t), decimal=5
+        )
+        pybamm.set_logging_level("WARNING")
 
     # def test_model_solver_failure(self):
     #     # Create model
