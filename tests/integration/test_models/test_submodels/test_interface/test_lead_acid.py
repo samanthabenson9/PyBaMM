@@ -13,9 +13,15 @@ class TestMainReaction(unittest.TestCase):
         c_e_s = pybamm.Variable("concentration", domain=["separator"])
         c_e_p = pybamm.Variable("concentration", domain=["positive electrode"])
         self.c_e = pybamm.Concatenation(c_e_n, c_e_s, c_e_p)
+        T_n = pybamm.Variable("temperature", domain=["negative electrode"])
+        T_s = pybamm.Variable("temperature", domain=["separator"])
+        T_p = pybamm.Variable("temperature", domain=["positive electrode"])
+        self.T = pybamm.Concatenation(T_n, T_s, T_p)
         self.variables = {
             "Negative electrolyte concentration": c_e_n,
             "Positive electrolyte concentration": c_e_p,
+            "Negative electrode temperature": T_n,
+            "Positive electrode temperature": T_p,
         }
 
     def tearDown(self):
@@ -67,14 +73,10 @@ class TestMainReaction(unittest.TestCase):
         # Test
         whole_cell = ["negative electrode", "separator", "positive electrode"]
         submesh = mesh.combine_submeshes(*whole_cell)
-        y = submesh[0].nodes ** 2
+        y = submesh.nodes ** 2
         # should evaluate to vectors with the right shape
-        self.assertEqual(
-            j0_n.evaluate(y=y).shape, (mesh["negative electrode"][0].npts, 1)
-        )
-        self.assertEqual(
-            j0_p.evaluate(y=y).shape, (mesh["positive electrode"][0].npts, 1)
-        )
+        self.assertEqual(j0_n.evaluate(y=y).shape, (mesh["negative electrode"].npts, 1))
+        self.assertEqual(j0_p.evaluate(y=y).shape, (mesh["positive electrode"].npts, 1))
 
     def test_diff_main_reaction(self):
         # With intercalation

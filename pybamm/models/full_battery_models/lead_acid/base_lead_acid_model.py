@@ -21,6 +21,16 @@ class BaseModel(pybamm.BaseBatteryModel):
 
         # Default timescale is discharge timescale
         self.timescale = self.param.tau_discharge
+
+        # Set default length scales
+        self.length_scales = {
+            "negative electrode": self.param.L_x,
+            "separator": self.param.L_x,
+            "positive electrode": self.param.L_x,
+            "current collector y": self.param.L_y,
+            "current collector z": self.param.L_z,
+        }
+
         self.set_standard_output_variables()
 
     @property
@@ -29,29 +39,16 @@ class BaseModel(pybamm.BaseBatteryModel):
 
     @property
     def default_geometry(self):
-        if self.options["dimensionality"] == 0:
-            return pybamm.Geometry("1D macro")
-        elif self.options["dimensionality"] == 1:
-            return pybamm.Geometry("1+1D macro")
-        elif self.options["dimensionality"] == 2:
-            return pybamm.Geometry("2+1D macro")
+        return pybamm.battery_geometry(
+            include_particles=False,
+            current_collector_dimension=self.options["dimensionality"],
+        )
 
     @property
     def default_var_pts(self):
         # Choose points that give uniform grid for the standard parameter values
         var = pybamm.standard_spatial_vars
         return {var.x_n: 25, var.x_s: 41, var.x_p: 34, var.y: 10, var.z: 10}
-
-    @property
-    def default_solver(self):
-        """
-        Return default solver based on whether model is ODE model or DAE model.
-        There are bugs with KLU on the lead-acid models.
-        """
-        if len(self.algebraic) == 0:
-            return pybamm.ScipySolver()
-        else:
-            return pybamm.CasadiSolver(mode="safe")
 
     def set_soc_variables(self):
         "Set variables relating to the state of charge."
@@ -69,3 +66,8 @@ class BaseModel(pybamm.BaseBatteryModel):
             self.variables["Fractional Charge Input"] = fci
             self.rhs[fci] = -self.variables["Total current density"] * 100
             self.initial_conditions[fci] = self.param.q_init * 100
+
+    def set_sei_submodel(self):
+
+        self.submodels["negative sei"] = pybamm.sei.NoSEI(self.param, "Negative")
+        self.submodels["positive sei"] = pybamm.sei.NoSEI(self.param, "Positive")

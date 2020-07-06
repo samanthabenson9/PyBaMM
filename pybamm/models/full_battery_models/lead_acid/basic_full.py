@@ -108,13 +108,13 @@ class BasicFull(BaseModel):
         )
 
         # Interfacial reactions
-        j0_n = param.j0_n_S_ref * c_e_n
+        j0_n = param.j0_n(c_e_n, T)
         j_n = (
             2
             * j0_n
             * pybamm.sinh(param.ne_n / 2 * (phi_s_n - phi_e_n - param.U_n(c_e_n, T)))
         )
-        j0_p = param.j0_p_S_ref * c_e_p ** 2 * param.c_w(c_e_p)
+        j0_p = param.j0_p(c_e_p, T)
         j_s = pybamm.PrimaryBroadcast(0, "separator")
         j_p = (
             2
@@ -288,8 +288,6 @@ class BasicFull(BaseModel):
             - param.U_n_ref
             + pot * phi_s_p,
             "Terminal voltage [V]": param.U_p_ref - param.U_n_ref + pot * voltage,
-            "x [m]": pybamm.standard_spatial_vars.x * param.L_x,
-            "x": pybamm.standard_spatial_vars.x,
             "Porosity": eps,
             "Volume-averaged velocity": v,
             "X-averaged separator transverse volume-averaged velocity": div_V_s,

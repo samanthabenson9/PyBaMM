@@ -116,6 +116,7 @@ class BaseModel(object):
         self._jacobian = None
         self._jacobian_algebraic = None
         self.external_variables = []
+        self._parameters = None
         self._input_parameters = None
 
         # Default behaviour is to use the jacobian and simplify
@@ -128,6 +129,7 @@ class BaseModel(object):
 
         # Default timescale is 1 second
         self.timescale = pybamm.Scalar(1)
+        self.length_scales = {}
 
     @property
     def name(self):
@@ -286,6 +288,25 @@ class BaseModel(object):
         self._timescale = value
 
     @property
+    def parameters(self):
+        "Returns all the parameters in the model"
+        if self._parameters is None:
+            self._parameters = self._find_parameters()
+        return self._parameters
+
+    def _find_parameters(self):
+        "Find all the parameters in the model"
+        unpacker = pybamm.SymbolUnpacker((pybamm.Parameter, pybamm.InputParameter))
+        all_parameters = unpacker.unpack_list_of_symbols(
+            list(self.rhs.values())
+            + list(self.algebraic.values())
+            + list(self.initial_conditions.values())
+            + list(self.variables.values())
+            + [event.expression for event in self.events]
+        )
+        return list(all_parameters.values())
+
+    @property
     def input_parameters(self):
         "Returns all the input parameters in the model"
         if self._input_parameters is None:
@@ -316,6 +337,7 @@ class BaseModel(object):
         new_model.use_simplify = self.use_simplify
         new_model.convert_to_format = self.convert_to_format
         new_model.timescale = self.timescale
+        new_model.length_scales = self.length_scales
         return new_model
 
     def update(self, *submodels):
@@ -627,7 +649,25 @@ class BaseModel(object):
 
         print(div)
 
-    def export_casadi_functions(self, variable_names):
+    def export_casadi_objects(self, variable_names, input_parameter_order=None):
+        """
+        Export the constituent parts of the model (rhs, algebraic, initial conditions,
+        etc) as casadi objects.
+
+        Parameters
+        ----------
+        variable_names : list
+            Variables to be exported alongside the model structure
+        input_parameter_order : list, optional
+            Order in which the input parameters should be stacked. If None, the order
+            returned by :meth:`BaseModel.input_parameters` is used
+
+        Returns
+        -------
+        casadi_dict : dict
+            Dictionary of {str: casadi object} pairs representing the model in casadi
+            format
+        """
         # Discretise model if it isn't already discretised
         # This only works with purely 0D models, as otherwise the mesh and spatial
         # method should be specified by the user
@@ -646,10 +686,18 @@ class BaseModel(object):
         y_diff = casadi.MX.sym("y_diff", self.concatenated_rhs.size)
         y_alg = casadi.MX.sym("y_alg", self.concatenated_algebraic.size)
         y_casadi = casadi.vertcat(y_diff, y_alg)
-        inputs = {}
+
+        # Read inputs
+        inputs_wrong_order = {}
         for input_param in self.input_parameters:
             name = input_param.name
-            inputs[name] = casadi.MX.sym(name, input_param._expected_size)
+            inputs_wrong_order[name] = casadi.MX.sym(name, input_param._expected_size)
+        # Sort according to input_parameter_order
+        if input_parameter_order is None:
+            inputs = inputs_wrong_order
+        else:
+            inputs = {name: inputs_wrong_order[name] for name in input_parameter_order}
+
         inputs_stacked = casadi.vertcat(*[p for p in inputs.values()])
 
         # Convert initial conditions to casadi form
@@ -714,9 +762,6 @@ class BaseModel(object):
         "Return default solver based on whether model is ODE model or DAE model"
         if len(self.algebraic) == 0:
             return pybamm.ScipySolver()
-        elif pybamm.have_idaklu() and self.use_jacobian is True:
-            # KLU solver requires jacobian to be provided
-            return pybamm.IDAKLUSolver()
         else:
             return pybamm.CasadiSolver(mode="safe")
 
@@ -740,11 +785,7 @@ def find_symbol_in_dict(dic, name):
 
 
 def find_symbol_in_model(model, name):
-    dics = [
-        model.rhs,
-        model.algebraic,
-        model.variables,
-    ]
+    dics = [model.rhs, model.algebraic, model.variables]
     for dic in dics:
         dic_return = find_symbol_in_dict(dic, name)
         if dic_return:

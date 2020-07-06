@@ -170,7 +170,7 @@ class TestScikitsSolvers(unittest.TestCase):
         combined_submesh = mesh.combine_submeshes(
             "negative electrode", "separator", "positive electrode"
         )
-        N = combined_submesh[0].npts
+        N = combined_submesh.npts
 
         # Solve
         solver = pybamm.ScikitsOdeSolver(rtol=1e-9, atol=1e-9)
@@ -388,7 +388,7 @@ class TestScikitsSolvers(unittest.TestCase):
         combined_submesh = mesh.combine_submeshes(
             "negative electrode", "separator", "positive electrode"
         )
-        N = combined_submesh[0].npts
+        N = combined_submesh.npts
 
         def jacobian(t, y):
             return np.block(
@@ -792,6 +792,5 @@ if __name__ == "__main__":
     print("Add -v for more debug output")
     if "-v" in sys.argv:
         debug = True
-        pybamm.set_logging_level("DEBUG")
     pybamm.settings.debug_mode = True
     unittest.main()

@@ -116,6 +116,30 @@ class TestBaseModel(unittest.TestCase):
         self.assertEqual(model[key], rhs[key])
         self.assertEqual(model[key], model.rhs[key])
 
+    def test_read_parameters(self):
+        # Read parameters from different parts of the model
+        model = pybamm.BaseModel()
+        a = pybamm.Parameter("a")
+        b = pybamm.Parameter("b")
+        c = pybamm.Parameter("c")
+        d = pybamm.Parameter("d")
+        e = pybamm.Parameter("e")
+        f = pybamm.Parameter("f")
+
+        u = pybamm.Variable("u")
+        v = pybamm.Variable("v")
+        model.rhs = {u: -u * a}
+        model.algebraic = {v: v - b}
+        model.initial_conditions = {u: c, v: d}
+        model.events = [pybamm.Event("u=e", u - e)]
+        model.variables = {"v+f": v + f}
+
+        self.assertEqual(
+            set([x.name for x in model.parameters]),
+            set([x.name for x in [a, b, c, d, e, f]]),
+        )
+        self.assertTrue(all(isinstance(x, pybamm.Parameter) for x in model.parameters))
+
     def test_read_input_parameters(self):
         # Read input parameters from different parts of the model
         model = pybamm.BaseModel()
@@ -139,7 +163,7 @@ class TestBaseModel(unittest.TestCase):
             set([x.name for x in [a, b, c, d, e, f]]),
         )
         self.assertTrue(
-            all(isinstance(x, pybamm.InputParameter) for x in model.input_parameters),
+            all(isinstance(x, pybamm.InputParameter) for x in model.input_parameters)
         )
 
     def test_update(self):
@@ -289,7 +313,7 @@ class TestBaseModel(unittest.TestCase):
         model.rhs = {c: d.diff(pybamm.t), d: -1}
         model.initial_conditions = {c: 1, d: 1}
         with self.assertRaisesRegex(
-            pybamm.ModelError, "time derivative of variable found",
+            pybamm.ModelError, "time derivative of variable found"
         ):
             model.check_well_posedness()
 
@@ -298,7 +322,7 @@ class TestBaseModel(unittest.TestCase):
         model.algebraic = {c: 2 * d - c, d: c * d.diff(pybamm.t) - d}
         model.initial_conditions = {c: 1, d: 1}
         with self.assertRaisesRegex(
-            pybamm.ModelError, "time derivative of variable found",
+            pybamm.ModelError, "time derivative of variable found"
         ):
             model.check_well_posedness()
 
@@ -307,7 +331,7 @@ class TestBaseModel(unittest.TestCase):
         model.rhs = {c: d.diff(pybamm.t), d: -1}
         model.initial_conditions = {c: 1, d: 1}
         with self.assertRaisesRegex(
-            pybamm.ModelError, "time derivative of variable found",
+            pybamm.ModelError, "time derivative of variable found"
         ):
             model.check_well_posedness()
 
@@ -318,7 +342,7 @@ class TestBaseModel(unittest.TestCase):
             c: 5 * pybamm.StateVectorDot(slice(0, 15)) - 1,
         }
         with self.assertRaisesRegex(
-            pybamm.ModelError, "time derivative of state vector found",
+            pybamm.ModelError, "time derivative of state vector found"
         ):
             model.check_well_posedness(post_discretisation=True)
 
@@ -327,7 +351,7 @@ class TestBaseModel(unittest.TestCase):
         model.rhs = {c: 5 * pybamm.StateVectorDot(slice(0, 15)) - 1}
         model.initial_conditions = {c: 1}
         with self.assertRaisesRegex(
-            pybamm.ModelError, "time derivative of state vector found",
+            pybamm.ModelError, "time derivative of state vector found"
         ):
             model.check_well_posedness(post_discretisation=True)
 
@@ -451,7 +475,7 @@ class TestBaseModel(unittest.TestCase):
         model.initial_conditions = {a: q, b: 1}
         model.variables = {"a+b": a + b - t}
 
-        out = model.export_casadi_functions(["a+b"])
+        out = model.export_casadi_objects(["a+b"])
 
         # Try making a function from the outputs
         t, x, z, p = out["t"], out["x"], out["z"], out["inputs"]
@@ -475,6 +499,32 @@ class TestBaseModel(unittest.TestCase):
         np.testing.assert_array_equal(np.array(jac_rhs_fn(5, 6, 7, [8, 9])), [[-8, 0]])
         np.testing.assert_array_equal(np.array(jac_alg_fn(5, 6, 7, [8, 9])), [[1, -1]])
         self.assertEqual(var_fn(6, 3, 2, [7, 2]), -1)
+
+        # Now change the order of input parameters
+        out = model.export_casadi_objects(["a+b"], input_parameter_order=["q", "p"])
+
+        # Try making a function from the outputs
+        t, x, z, p = out["t"], out["x"], out["z"], out["inputs"]
+        x0, z0 = out["x0"], out["z0"]
+        rhs, alg = out["rhs"], out["algebraic"]
+        var = out["variables"]["a+b"]
+        jac_rhs, jac_alg = out["jac_rhs"], out["jac_algebraic"]
+        x0_fn = casadi.Function("x0", [p], [x0])
+        z0_fn = casadi.Function("x0", [p], [z0])
+        rhs_fn = casadi.Function("rhs", [t, x, z, p], [rhs])
+        alg_fn = casadi.Function("alg", [t, x, z, p], [alg])
+        jac_rhs_fn = casadi.Function("jac_rhs", [t, x, z, p], [jac_rhs])
+        jac_alg_fn = casadi.Function("jac_alg", [t, x, z, p], [jac_alg])
+        var_fn = casadi.Function("var", [t, x, z, p], [var])
+
+        # Test that function values are as expected
+        self.assertEqual(x0_fn([5, 0]), 5)
+        self.assertEqual(z0_fn([0, 0]), 1)
+        self.assertEqual(rhs_fn(0, 3, 2, [2, 7]), -21)
+        self.assertEqual(alg_fn(0, 3, 2, [2, 7]), 1)
+        np.testing.assert_array_equal(np.array(jac_rhs_fn(5, 6, 7, [9, 8])), [[-8, 0]])
+        np.testing.assert_array_equal(np.array(jac_alg_fn(5, 6, 7, [9, 8])), [[1, -1]])
+        self.assertEqual(var_fn(6, 3, 2, [2, 7]), -1)
 
 
 class TestStandardBatteryBaseModel(unittest.TestCase):
