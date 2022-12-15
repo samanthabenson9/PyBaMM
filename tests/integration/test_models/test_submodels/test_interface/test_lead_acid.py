@@ -31,11 +31,11 @@ class TestMainReaction(unittest.TestCase):
         # With intercalation
         param = pybamm.LeadAcidParameters()
         model_n = pybamm.interface.BaseInterface(
-            param, "Negative", "lead-acid main", {}
+            param, "negative", "lead-acid main", {}
         )
         j0_n = model_n._get_exchange_current_density(self.variables)
         model_p = pybamm.interface.BaseInterface(
-            param, "Positive", "lead-acid main", {}
+            param, "positive", "lead-acid main", {}
         )
         j0_p = model_p._get_exchange_current_density(self.variables)
         self.assertEqual(j0_n.domain, ["negative electrode"])
@@ -45,11 +45,11 @@ class TestMainReaction(unittest.TestCase):
         # With intercalation
         param = pybamm.LeadAcidParameters()
         model_n = pybamm.interface.BaseInterface(
-            param, "Negative", "lead-acid main", {}
+            param, "negative", "lead-acid main", {}
         )
         j0_n = model_n._get_exchange_current_density(self.variables)
         model_p = pybamm.interface.BaseInterface(
-            param, "Positive", "lead-acid main", {}
+            param, "positive", "lead-acid main", {}
         )
         j0_p = model_p._get_exchange_current_density(self.variables)
         # Process parameters
@@ -66,11 +66,11 @@ class TestMainReaction(unittest.TestCase):
         # With intercalation
         param = pybamm.LeadAcidParameters()
         model_n = pybamm.interface.BaseInterface(
-            param, "Negative", "lead-acid main", {}
+            param, "negative", "lead-acid main", {}
         )
         j0_n = model_n._get_exchange_current_density(self.variables)
         model_p = pybamm.interface.BaseInterface(
-            param, "Positive", "lead-acid main", {}
+            param, "positive", "lead-acid main", {}
         )
         j0_p = model_p._get_exchange_current_density(self.variables)
         # Process parameters and discretise
@@ -83,7 +83,7 @@ class TestMainReaction(unittest.TestCase):
 
         # Test
         whole_cell = ["negative electrode", "separator", "positive electrode"]
-        submesh = mesh.combine_submeshes(*whole_cell)
+        submesh = mesh[whole_cell]
         y = submesh.nodes**2
         # should evaluate to vectors with the right shape
         self.assertEqual(j0_n.evaluate(y=y).shape, (mesh["negative electrode"].npts, 1))

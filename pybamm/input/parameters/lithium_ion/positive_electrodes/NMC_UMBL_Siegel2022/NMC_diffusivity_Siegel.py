@@ -23,8 +23,8 @@ def NMC_diffusivity_Siegel(sto, T):
         Solid diffusivity
     """
 
-    D_ref = 8 * 10 ** (-15)
-    E_D_s = 18550
+    D_ref = 4.4 * 10 ** (-15)# 4.4 × 10 −11 cm 2 s −1
+    E_D_s = 18550 
     arrhenius = exp(E_D_s / constants.R * (1 / 298.15 - 1 / T))
 
     return D_ref * arrhenius

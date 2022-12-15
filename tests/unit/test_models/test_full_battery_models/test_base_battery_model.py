@@ -34,7 +34,7 @@ PRINT_OPTIONS_OUTPUT = """\
 'particle phases': '1' (possible: ['1', '2'])
 'particle shape': 'spherical' (possible: ['spherical', 'no particles'])
 'particle size': 'single' (possible: ['single', 'distribution'])
-'SEI': 'none' (possible: ['none', 'constant', 'reaction limited', 'solvent-diffusion limited', 'electron-migration limited', 'interstitial-diffusion limited', 'ec reaction limited'])
+'SEI': 'none' (possible: ['none', 'constant', 'reaction limited', 'reaction limited (asymmetric)', 'solvent-diffusion limited', 'electron-migration limited', 'interstitial-diffusion limited', 'ec reaction limited', 'ec reaction limited (asymmetric)'])
 'SEI film resistance': 'none' (possible: ['none', 'distributed', 'average'])
 'SEI on cracks': 'false' (possible: ['false', 'true'])
 'SEI porosity change': 'false' (possible: ['false', 'true'])
@@ -44,7 +44,6 @@ PRINT_OPTIONS_OUTPUT = """\
 'total interfacial current density as a state': 'false' (possible: ['false', 'true'])
 'working electrode': 'both' (possible: ['both', 'negative', 'positive'])
 'x-average side reactions': 'false' (possible: ['false', 'true'])
-'external submodels': []
 'timescale': 'default'
 """  # noqa: E501
 
@@ -282,13 +281,13 @@ class TestBaseBatteryModel(unittest.TestCase):
             )
 
         # check default options change
-        model = pybamm.BaseBatteryModel({
-            "loss of active material": "stress-driven",
-            "SEI on cracks": "true"
-        })
-        self.assertEqual(model.options["particle mechanics"], (
-            "swelling and cracking", "swelling only"
-        ))
+        model = pybamm.BaseBatteryModel(
+            {"loss of active material": "stress-driven", "SEI on cracks": "true"}
+        )
+        self.assertEqual(
+            model.options["particle mechanics"],
+            ("swelling and cracking", "swelling only"),
+        )
         self.assertEqual(model.options["stress-induced diffusion"], "true")
 
         # crack model
@@ -435,6 +434,23 @@ class TestOptions(unittest.TestCase):
         self.assertEqual(options.positive["particle mechanics"], "none")
         self.assertEqual(options.positive.primary["particle mechanics"], "none")
         self.assertEqual(options.positive.secondary["particle mechanics"], "none")
+
+    def test_whole_cell_domains(self):
+        options = BatteryModelOptions({"working electrode": "positive"})
+        self.assertEqual(
+            options.whole_cell_domains, ["separator", "positive electrode"]
+        )
+
+        options = BatteryModelOptions({"working electrode": "negative"})
+        self.assertEqual(
+            options.whole_cell_domains, ["negative electrode", "separator"]
+        )
+
+        options = BatteryModelOptions({})
+        self.assertEqual(
+            options.whole_cell_domains,
+            ["negative electrode", "separator", "positive electrode"],
+        )
 
 
 if __name__ == "__main__":

@@ -2,6 +2,7 @@
 # Base parameters class
 #
 import pybamm
+import warnings
 
 
 class BaseParameters:
@@ -17,6 +18,9 @@ class BaseParameters:
         try:
             return super().__getattribute__(name)
         except AttributeError as e:
+            if name == "cap_init":
+                warnings.warn("Parameter 'cap_init' has been renamed to 'Q_init'")
+                return self.Q_init
             for domain in ["n", "s", "p"]:
                 if f"_{domain}_" in name or name.endswith(f"_{domain}"):
                     name_without_domain = name.replace(f"_{domain}_", "_").replace(
@@ -44,7 +48,7 @@ class BaseParameters:
 
     def __setattr__(self, name, value):
         if hasattr(self, "domain"):
-            d = self.domain.lower()[0]
+            d = self.domain[0]
             print_name = f"{name}_{d}"
         else:
             print_name = name
@@ -60,11 +64,24 @@ class BaseParameters:
     def options(self, extra_options):
         self._options = pybamm.BatteryModelOptions(extra_options)
 
+    @property
+    def domain(self):
+        return self._domain
+
+    @domain.setter
+    def domain(self, domain):
+        self._domain = domain
+        if domain is not None:
+            self._Domain = domain.capitalize()
+
+    @property
+    def domain_Domain(self):
+        return self.domain, self._Domain
+
     def set_phase_name(self):
         if (
             self.phase == "primary"
-            and getattr(self.main_param.options, self.domain.lower())["particle phases"]
-            == "1"
+            and getattr(self.main_param.options, self.domain)["particle phases"] == "1"
         ):
             # Only one phase, no need to distinguish between
             # "primary" and "secondary"
@@ -80,7 +97,14 @@ class BaseParameters:
 class NullParameters:
     def __getattribute__(self, name):
         "Returns 0 for some parameters that aren't found by __getattribute__"
-        if name in ["epsilon_s", "cap_init", "n_Li_init", "R_typ", "j_scale"]:
+        if name in [
+            "epsilon_s",
+            "Q_init",
+            "n_Li_init",
+            "Q_Li_init",
+            "R_typ",
+            "j_scale",
+        ]:
             return pybamm.Scalar(0)
         else:
             return super().__getattribute__(name)

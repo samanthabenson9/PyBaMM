@@ -10,14 +10,14 @@ on:
   workflow_dispatch:
     inputs:
       commit_start:
-        description: 'Identifier of commit from which to start'
-        default: 'v0.1.0'
+        description: "Identifier of commit from which to start"
+        default: "v0.1.0"
       commit_end:
-        description: 'Identifier of commit at which to end'
-        default: 'develop'
+        description: "Identifier of commit at which to end"
+        default: "develop"
       ncommits:
-        description: 'Number of commits to benchmark between commit_start and commit_end'
-        default: '100'
+        description: "Number of commits to benchmark between commit_start and commit_end"
+        default: "100"
 jobs:
   benchmarks:
     runs-on: ubuntu-latest
@@ -28,7 +28,7 @@ jobs:
         with:
           python-version: 3.8
       - name: Install tox and asv
-        run: pip install -U pip tox asv
+        run: pip install -U pip "tox<4" asv
       - name: Fetch develop branch
         # Not required when worklow trigerred
         # on develop, but useful when
@@ -80,9 +80,7 @@ jobs:
           git commit -am "Add new results"
           git push
       - name: Publish results
-        run:
-          |
-            asv publish
-            git fetch origin gh-pages:gh-pages
-            asv gh-pages
-      
+        run: |
+          asv publish
+          git fetch origin gh-pages:gh-pages
+          asv gh-pages

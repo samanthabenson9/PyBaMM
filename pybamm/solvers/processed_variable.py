@@ -6,6 +6,7 @@ import numbers
 import numpy as np
 import pybamm
 import scipy.interpolate as interp
+from scipy.integrate import cumulative_trapezoid
 
 
 class ProcessedVariable(object):
@@ -33,7 +34,14 @@ class ProcessedVariable(object):
         Default is True.
     """
 
-    def __init__(self, base_variables, base_variables_casadi, solution, warn=True):
+    def __init__(
+        self,
+        base_variables,
+        base_variables_casadi,
+        solution,
+        warn=True,
+        cumtrapz_ic=None,
+    ):
         self.base_variables = base_variables
         self.base_variables_casadi = base_variables_casadi
 
@@ -46,6 +54,7 @@ class ProcessedVariable(object):
         self.domain = base_variables[0].domain
         self.domains = base_variables[0].domains
         self.warn = warn
+        self.cumtrapz_ic = cumtrapz_ic
 
         # Sensitivity starts off uninitialized, only set when called
         self._sensitivities = None
@@ -53,6 +62,7 @@ class ProcessedVariable(object):
 
         # Set timescale
         self.timescale = solution.timescale_eval
+        self.t_pts_nondim = solution.t
         self.t_pts = solution.t * self.timescale
 
         # Store length scales
@@ -106,6 +116,9 @@ class ProcessedVariable(object):
         # initialise empty array of the correct size
         entries = np.empty(len(self.t_pts))
         idx = 0
+
+        entries = np.empty(len(self.t_pts))
+        idx = 0
         # Evaluate the base_variable index-by-index
         for ts, ys, inputs, base_var_casadi in zip(
             self.all_ts, self.all_ys, self.all_inputs_casadi, self.base_variables_casadi
@@ -113,8 +126,14 @@ class ProcessedVariable(object):
             for inner_idx, t in enumerate(ts):
                 t = ts[inner_idx]
                 y = ys[:, inner_idx]
-                entries[idx] = base_var_casadi(t, y, inputs).full()[0, 0]
+                entries[idx] = float(base_var_casadi(t, y, inputs))
+
                 idx += 1
+
+        if self.cumtrapz_ic is not None:
+            entries = cumulative_trapezoid(
+                entries, self.t_pts_nondim, initial=float(self.cumtrapz_ic)
+            )
 
         # set up interpolation
         if len(self.t_pts) == 1:

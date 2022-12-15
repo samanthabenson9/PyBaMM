@@ -47,7 +47,6 @@ class UnaryOperator(pybamm.Symbol):
 
     def _unary_new_copy(self, child):
         """Make a new copy of the unary operator, with child `child`"""
-
         return self.__class__(child)
 
     def _unary_jac(self, child_jac):
@@ -958,6 +957,18 @@ class BoundaryValue(BoundaryOperator):
             return sympy.Symbol(latex_child)
 
 
+class ExplicitTimeIntegral(UnaryOperator):
+    def __init__(self, children, initial_condition):
+        super().__init__("explicit time integral", children)
+        self.initial_condition = initial_condition
+
+    def _unary_new_copy(self, child):
+        return self.__class__(child, self.initial_condition)
+
+    def is_constant(self):
+        return False
+
+
 class BoundaryGradient(BoundaryOperator):
     """
     A node in the expression tree which gets the boundary flux of a variable.
@@ -1076,7 +1087,10 @@ def grad(symbol):
     """
     # Gradient of a broadcast is zero
     if isinstance(symbol, pybamm.PrimaryBroadcast):
-        new_child = pybamm.PrimaryBroadcast(0, symbol.child.domain)
+        if symbol.child.domain == []:
+            new_child = pybamm.Scalar(0)
+        else:
+            new_child = pybamm.PrimaryBroadcast(0, symbol.child.domain)
         return pybamm.PrimaryBroadcastToEdges(new_child, symbol.domain)
     elif isinstance(symbol, pybamm.FullBroadcast):
         return pybamm.FullBroadcastToEdges(0, broadcast_domains=symbol.domains)
@@ -1102,7 +1116,10 @@ def div(symbol):
     """
     # Divergence of a broadcast is zero
     if isinstance(symbol, pybamm.PrimaryBroadcastToEdges):
-        new_child = pybamm.PrimaryBroadcast(0, symbol.child.domain)
+        if symbol.child.domain == []:
+            new_child = pybamm.Scalar(0)
+        else:
+            new_child = pybamm.PrimaryBroadcast(0, symbol.child.domain)
         return pybamm.PrimaryBroadcast(new_child, symbol.domain)
     # Divergence commutes with Negate operator
     if isinstance(symbol, pybamm.Negate):
@@ -1237,6 +1254,14 @@ def boundary_value(symbol, side):
 
 def sign(symbol):
     """Returns a :class:`Sign` object."""
+    if isinstance(symbol, pybamm.Broadcast):
+        # Move sign inside the broadcast
+        # Apply recursively
+        return symbol._unary_new_copy(sign(symbol.orphans[0]))
+    elif isinstance(symbol, pybamm.Concatenation) and not isinstance(
+        symbol, pybamm.ConcatenationVariable
+    ):
+        return pybamm.concatenation(*[sign(child) for child in symbol.orphans])
     return pybamm.simplify_if_constant(Sign(symbol))
 
 

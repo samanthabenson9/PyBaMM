@@ -19,7 +19,7 @@ def test_multi_var_function(arg1, arg2):
 
 
 def test_multi_var_function_cube(arg1, arg2):
-    return arg1 + arg2 ** 3
+    return arg1 + arg2**3
 
 
 class TestFunction(unittest.TestCase):
@@ -113,10 +113,6 @@ class TestFunction(unittest.TestCase):
         b = pybamm.Variable("b", domain="something else")
         with self.assertRaises(pybamm.DomainError):
             pybamm.Function(test_multi_var_function, a, b)
-
-        fun = pybamm.Function(np.cos, pybamm.t)
-        with self.assertRaisesRegex(NotImplementedError, "No julia name"):
-            fun.julia_name
 
     def test_function_unnamed(self):
         fun = pybamm.Function(np.cos, pybamm.t)
@@ -267,7 +263,7 @@ class TestSpecificFunctions(unittest.TestCase):
 
         # Base 10
         fun = pybamm.log10(a)
-        self.assertEqual(fun.evaluate(inputs={"a": 3}), np.log10(3))
+        self.assertAlmostEqual(fun.evaluate(inputs={"a": 3}), np.log10(3))
         h = 0.0000001
         self.assertAlmostEqual(
             fun.diff(a).evaluate(inputs={"a": 3}),

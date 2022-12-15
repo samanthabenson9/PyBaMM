@@ -162,24 +162,21 @@ class BaseIntegrationTestLithiumIon:
             "lithium plating": "irreversible",
             "lithium plating porosity change": "true",
         }
-        param = pybamm.ParameterValues(
-            {
-                "chemistry": "lithium_ion",
-                "cell": "LGM50_Chen2020",
-                "negative electrode": "graphite_Chen2020",
-                "separator": "separator_Chen2020",
-                "positive electrode": "nmc_Chen2020",
-                "electrolyte": "lipf6_Nyman2008",
-                "experiment": "1C_discharge_from_full_Chen2020",
-                "sei": "example",
-                "lithium plating": "okane2020_Li_plating",
-            }
-        )
+        param = pybamm.ParameterValues("OKane2022")
         self.run_basic_processing_test(options, parameter_values=param)
 
     def test_sei_reaction_limited(self):
         options = {"SEI": "reaction limited"}
         self.run_basic_processing_test(options)
+
+    def test_sei_asymmetric_reaction_limited(self):
+        options = {"SEI": "reaction limited (asymmetric)"}
+        parameter_values = pybamm.ParameterValues("Marquis2019")
+        parameter_values.update(
+            {"SEI growth transfer coefficient": 0.2},
+            check_already_exists=False,
+        )
+        self.run_basic_processing_test(options, parameter_values=parameter_values)
 
     def test_sei_solvent_diffusion_limited(self):
         options = {"SEI": "solvent-diffusion limited"}
@@ -194,15 +191,30 @@ class BaseIntegrationTestLithiumIon:
         self.run_basic_processing_test(options)
 
     def test_sei_ec_reaction_limited(self):
-        options = {"SEI": "ec reaction limited", "SEI porosity change": "true"}
+        options = {
+            "SEI": "ec reaction limited",
+            "SEI porosity change": "true",
+        }
         self.run_basic_processing_test(options)
 
-    def test_loss_active_material_stress_negative(self):
+    def test_sei_asymmetric_ec_reaction_limited(self):
+        options = {
+            "SEI": "ec reaction limited (asymmetric)",
+            "SEI porosity change": "true",
+        }
+        parameter_values = pybamm.ParameterValues("Marquis2019")
+        parameter_values.update(
+            {"SEI growth transfer coefficient": 0.2},
+            check_already_exists=False,
+        )
+        self.run_basic_processing_test(options, parameter_values=parameter_values)
+
+    def test_loss_active_material_stress_positive(self):
         options = {"loss of active material": ("none", "stress-driven")}
         parameter_values = pybamm.ParameterValues("Ai2020")
         self.run_basic_processing_test(options, parameter_values=parameter_values)
 
-    def test_loss_active_material_stress_positive(self):
+    def test_loss_active_material_stress_negative(self):
         options = {"loss of active material": ("stress-driven", "none")}
         parameter_values = pybamm.ParameterValues("Ai2020")
         self.run_basic_processing_test(options, parameter_values=parameter_values)

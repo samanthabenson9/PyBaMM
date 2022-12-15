@@ -48,7 +48,7 @@ class ScikitsOdeSolver(pybamm.BaseSolver):
         method="cvode",
         rtol=1e-6,
         atol=1e-6,
-        extrap_tol=0,
+        extrap_tol=None,
         extra_options=None,
     ):
         if scikits_odes_spec is None:  # pragma: no cover
@@ -93,9 +93,12 @@ class ScikitsOdeSolver(pybamm.BaseSolver):
         jacobian = model.jac_rhs_eval
 
         if model.convert_to_format == "casadi":
+
             def eqsydot(t, y, return_ydot):
                 return_ydot[:] = derivs(t, y, inputs).full().flatten()
+
         else:
+
             def eqsydot(t, y, return_ydot):
                 return_ydot[:] = derivs(t, y, inputs).flatten()
 

@@ -18,6 +18,7 @@ gmproj/extra/
 !CMakeLists.txt
 !pybamm/CITATIONS.txt
 !pybamm/input/**/*.csv
+!tests/unit/test_parameters/*.csv
 !benchmarks/benchmark_images/*.png
 
 # running files
@@ -117,9 +118,6 @@ GMJULY2022*
 
 # tox
 .tox/
-
-# julia
-Manifest.toml
 
 # vcpkg
 vcpkg_installed/

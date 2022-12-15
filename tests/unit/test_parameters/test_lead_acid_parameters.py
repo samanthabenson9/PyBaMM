@@ -28,7 +28,6 @@ class TestStandardParametersLeadAcid(unittest.TestCase):
         parameters = pybamm.LeadAcidParameters()
         parameter_values = pybamm.lead_acid.BaseModel().default_parameter_values
         param_eval = parameter_values.print_parameters(parameters)
-        param_eval = {k: v[0] for k, v in param_eval.items()}
 
         # Diffusional C-rate should be smaller than C-rate
         self.assertLess(param_eval["C_e"], param_eval["C_rate"])
@@ -68,10 +67,8 @@ class TestStandardParametersLeadAcid(unittest.TestCase):
         processed_s = disc.process_symbol(parameter_values.process_symbol(s_param))
 
         # test output
-        combined_submeshes = disc.mesh.combine_submeshes(
-            "negative electrode", "separator", "positive electrode"
-        )
-        self.assertEqual(processed_s.shape, (combined_submeshes.npts, 1))
+        submeshes = disc.mesh[("negative electrode", "separator", "positive electrode")]
+        self.assertEqual(processed_s.shape, (submeshes.npts, 1))
 
     def test_current_functions(self):
         # create current functions
@@ -140,7 +137,6 @@ class TestStandardParametersLeadAcid(unittest.TestCase):
         # Process
         parameter_values = pybamm.ParameterValues("Sulzer2019")
         param_eval = parameter_values.print_parameters(parameters)
-        param_eval = {k: v[0] for k, v in param_eval.items()}
 
         # Known values for dimensionless functions
         self.assertEqual(param_eval["D_e_1"], 1)
@@ -155,12 +151,10 @@ class TestStandardParametersLeadAcid(unittest.TestCase):
         parameters = pybamm.LeadAcidParameters()
         parameter_values = pybamm.lead_acid.BaseModel().default_parameter_values
         param_eval = parameter_values.print_parameters(parameters)
-        param_eval = {k: v[0] for k, v in param_eval.items()}
 
         # Update initial state of charge
         parameter_values.update({"Initial State of Charge": 0.2})
         param_eval_update = parameter_values.print_parameters(parameters)
-        param_eval_update = {k: v[0] for k, v in param_eval_update.items()}
 
         # Test that relevant parameters have changed as expected
         self.assertLess(param_eval_update["q_init"], param_eval["q_init"])

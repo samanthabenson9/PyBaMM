@@ -19,13 +19,17 @@ class TestCasadiSolver(unittest.TestCase):
         var = pybamm.Variable("var")
         model.rhs = {var: 0.1 * var}
         model.initial_conditions = {var: 1}
-        # No need to set parameters; can use base discretisation (no spatial operators)
 
         # create discretisation
         disc = pybamm.Discretisation()
         model_disc = disc.process_model(model, inplace=False)
         # Solve
-        solver = pybamm.CasadiSolver(mode="fast", rtol=1e-8, atol=1e-8)
+        solver = pybamm.CasadiSolver(
+            mode="fast",
+            rtol=1e-8,
+            atol=1e-8,
+            perturb_algebraic_initial_conditions=False,  # added for coverage
+        )
         t_eval = np.linspace(0, 1, 100)
         solution = solver.solve(model_disc, t_eval)
         np.testing.assert_array_equal(solution.t, t_eval)
@@ -43,14 +47,6 @@ class TestCasadiSolver(unittest.TestCase):
             solution.y.full()[0], np.exp(0.1 * solution.t), decimal=5
         )
 
-        # Safe mode, without grid (enforce events that won't be triggered)
-        solver = pybamm.CasadiSolver(mode="safe without grid", rtol=1e-8, atol=1e-8)
-        solution = solver.solve(model, t_eval)
-        np.testing.assert_array_equal(solution.t, t_eval)
-        np.testing.assert_array_almost_equal(
-            solution.y.full()[0], np.exp(0.1 * solution.t), decimal=5
-        )
-
         # Fast with events
         # with an ODE model this behaves exactly the same as "fast"
         solver = pybamm.CasadiSolver(mode="fast with events", rtol=1e-8, atol=1e-8)
@@ -60,6 +56,58 @@ class TestCasadiSolver(unittest.TestCase):
             solution.y.full()[0], np.exp(0.1 * solution.t), decimal=5
         )
 
+    def test_without_grid(self):
+        t_eval = np.linspace(0, 1, 100)
+
+        # ODE model
+        model = pybamm.BaseModel()
+        var = pybamm.Variable("var")
+        model.rhs = {var: 0.1 * var}
+        model.initial_conditions = {var: 1}
+        model.events = [pybamm.Event("an event", var + 1)]
+
+        # Safe mode, without grid (enforce events that won't be triggered)
+        solver = pybamm.CasadiSolver(mode="safe without grid", rtol=1e-8, atol=1e-8)
+        solution = solver.solve(model, t_eval)
+        np.testing.assert_array_equal(solution.t, t_eval)
+        np.testing.assert_array_almost_equal(
+            solution.y.full()[0], np.exp(0.1 * solution.t), decimal=5
+        )
+
+        # DAE model
+        model = pybamm.BaseModel()
+        var = pybamm.Variable("var")
+        var2 = pybamm.Variable("var2")
+        model.rhs = {var: 0.1 * var}
+        model.algebraic = {var2: 1 - var2}
+        model.initial_conditions = {var: 1, var2: 1}
+        model.events = [pybamm.Event("an event", var + 1)]
+
+        # Safe mode, without grid (enforce events that won't be triggered)
+        solver = pybamm.CasadiSolver(mode="safe without grid", rtol=1e-8, atol=1e-8)
+        solution = solver.solve(model, t_eval)
+        np.testing.assert_array_equal(solution.t, t_eval)
+        np.testing.assert_array_almost_equal(
+            solution.y.full()[0], np.exp(0.1 * t_eval), decimal=5
+        )
+        np.testing.assert_array_almost_equal(
+            solution.y.full()[1], np.ones_like(t_eval), decimal=5
+        )
+
+        # DAE model, errors
+        model = pybamm.BaseModel()
+        var = pybamm.Variable("var")
+        var2 = pybamm.Variable("var2")
+        model.rhs = {var: -pybamm.sqrt(var)}
+        model.algebraic = {var2: 1 - var2}
+        model.initial_conditions = {var: 1, var2: 1}
+        model.events = [pybamm.Event("an event", var + 1)]
+
+        # Safe mode, without grid (enforce events that won't be triggered)
+        solver = pybamm.CasadiSolver(mode="safe without grid", rtol=1e-8, atol=1e-8)
+        with self.assertRaisesRegex(pybamm.SolverError, "Maximum number of decreased"):
+            solver.solve(model, [0, 10])
+
     def test_model_solver_python(self):
         # Create model
         pybamm.set_logging_level("ERROR")
@@ -68,11 +116,6 @@ class TestCasadiSolver(unittest.TestCase):
         var = pybamm.Variable("var")
         model.rhs = {var: 0.1 * var}
         model.initial_conditions = {var: 1}
-        # No need to set parameters; can use base discretisation (no spatial operators)
-
-        # create discretisation
-        disc = pybamm.Discretisation()
-        disc.process_model(model)
         # Solve
         solver = pybamm.CasadiSolver(mode="fast", rtol=1e-8, atol=1e-8)
         t_eval = np.linspace(0, 1, 100)
@@ -87,27 +130,36 @@ class TestCasadiSolver(unittest.TestCase):
         # Create model
         model = pybamm.BaseModel()
         var = pybamm.Variable("var")
+        var2 = pybamm.Variable("var2")
         model.rhs = {var: -pybamm.sqrt(var)}
-        model.initial_conditions = {var: 1}
+        model.algebraic = {var2: var2 - 1}
+        model.initial_conditions = {var: 1, var2: 1}
         # add events so that safe mode is used (won't be triggered)
-        model.events = [pybamm.Event("10", var - 10)]
-        # No need to set parameters; can use base discretisation (no spatial operators)
+        model.events = [pybamm.Event("10", 10 - var)]
 
-        # create discretisation
         disc = pybamm.Discretisation()
         model_disc = disc.process_model(model, inplace=False)
-
-        solver = pybamm.CasadiSolver(extra_options_call={"regularity_check": False})
+        solver = pybamm.CasadiSolver(
+            dt_max=1e-3, return_solution_if_failed_early=True, max_step_decrease_count=2
+        )
         # Solve with failure at t=2
+        # Solution fails early but manages to take some steps so we return it anyway
+        # Check that the final solution does indeed stop before t=20
         t_eval = np.linspace(0, 20, 100)
-        with self.assertRaises(pybamm.SolverError):
-            solver.solve(model_disc, t_eval)
+        with self.assertWarns(pybamm.SolverWarning):
+            solution = solver.solve(model_disc, t_eval)
+        self.assertLess(solution.t[-1], 20)
         # Solve with failure at t=0
-        model.initial_conditions = {var: 0}
+        solver = pybamm.CasadiSolver(
+            dt_max=1e-3, return_solution_if_failed_early=True, max_step_decrease_count=2
+        )
+        model.initial_conditions = {var: 0, var2: 1}
         model_disc = disc.process_model(model, inplace=False)
         t_eval = np.linspace(0, 20, 100)
-        with self.assertRaises(pybamm.SolverError):
-            solver.solve(model_disc, t_eval)
+        # This one should fail immediately and throw a `SolverError`
+        # since no progress can be made from the first timestep
+        with self.assertRaisesRegex(pybamm.SolverError, "Maximum number of decreased"):
+            solver.solve(model, t_eval)
 
     def test_model_solver_events(self):
         # Create model
@@ -209,8 +261,6 @@ class TestCasadiSolver(unittest.TestCase):
             pybamm.Event("event", 1.02 - var),
             pybamm.Event("sqrt event", pybamm.sqrt(1.0199 - var)),
         ]
-        disc = pybamm.Discretisation()
-        disc.process_model(model)
         solver = pybamm.CasadiSolver(rtol=1e-8, atol=1e-8)
         solution = solver.solve(model, t_eval)
         np.testing.assert_array_less(solution.y.full()[0], 1.02 + 1e-10)
@@ -223,8 +273,6 @@ class TestCasadiSolver(unittest.TestCase):
         var = pybamm.Variable("var", domain=domain)
         model.rhs = {var: 0.1 * var}
         model.initial_conditions = {var: 1}
-        # No need to set parameters; can use base discretisation (no spatial operators)
-
         # create discretisation
         mesh = get_mesh_for_testing()
         spatial_methods = {"macroscale": pybamm.FiniteVolume()}
@@ -263,11 +311,6 @@ class TestCasadiSolver(unittest.TestCase):
         model.rhs = {var: a * var}
         model.initial_conditions = {var: 1}
         model.variables = {"a": a}
-        # No need to set parameters; can use base discretisation (no spatial operators)
-
-        # create discretisation
-        disc = pybamm.Discretisation()
-        disc.process_model(model)
 
         solver = pybamm.CasadiSolver(rtol=1e-8, atol=1e-8)
 
@@ -305,8 +348,6 @@ class TestCasadiSolver(unittest.TestCase):
             pybamm.Event("var1 = 1.5", pybamm.min(1.5 - var1)),
             pybamm.Event("var2 = 2.5", pybamm.min(2.5 - var2)),
         ]
-        disc = pybamm.Discretisation()
-        disc.process_model(model)
 
         # Solve
         step_solver = pybamm.CasadiSolver(rtol=1e-8, atol=1e-8)
@@ -338,9 +379,6 @@ class TestCasadiSolver(unittest.TestCase):
         model.rhs = {var: -pybamm.InputParameter("rate") * var}
         model.initial_conditions = {var: 1}
         model.events = [pybamm.Event("var=0.5", pybamm.min(var - 0.5))]
-        # No need to set parameters; can use base discretisation (no spatial
-        # operators)
-
         # create discretisation
         mesh = get_mesh_for_testing()
         spatial_methods = {"macroscale": pybamm.FiniteVolume()}
@@ -405,32 +443,6 @@ class TestCasadiSolver(unittest.TestCase):
             solution.y.full()[-1], 1 * np.exp(-0.1 * solution.t), decimal=5
         )
 
-    def test_model_solver_with_external(self):
-        # Create model
-        model = pybamm.BaseModel()
-        domain = ["negative electrode", "separator", "positive electrode"]
-        var1 = pybamm.Variable("var1", domain=domain)
-        var2 = pybamm.Variable("var2", domain=domain)
-        model.rhs = {var1: -var2}
-        model.initial_conditions = {var1: 1}
-        model.external_variables = [var2]
-        model.variables = {"var1": var1, "var2": var2}
-        # No need to set parameters; can use base discretisation (no spatial
-        # operators)
-
-        # create discretisation
-        mesh = get_mesh_for_testing()
-        spatial_methods = {"macroscale": pybamm.FiniteVolume()}
-        disc = pybamm.Discretisation(mesh, spatial_methods)
-        disc.process_model(model)
-        # Solve
-        solver = pybamm.CasadiSolver(rtol=1e-8, atol=1e-8)
-        t_eval = np.linspace(0, 10, 100)
-        solution = solver.solve(model, t_eval, external_variables={"var2": 0.5})
-        np.testing.assert_allclose(
-            solution.y.full()[0], 1 - 0.5 * solution.t, rtol=1e-06
-        )
-
     def test_model_solver_with_non_identity_mass(self):
         model = pybamm.BaseModel()
         var1 = pybamm.Variable("var1", domain="negative electrode")
@@ -466,9 +478,6 @@ class TestCasadiSolver(unittest.TestCase):
         model.algebraic = {var: var + 1}
         model.initial_conditions = {var: 0}
 
-        disc = pybamm.Discretisation()
-        disc.process_model(model)
-
         solver = pybamm.CasadiSolver()
         t_eval = np.linspace(0, 1)
         with self.assertRaisesRegex(
@@ -480,7 +489,7 @@ class TestCasadiSolver(unittest.TestCase):
         model = pybamm.lithium_ion.DFN()
         param = pybamm.ParameterValues("NCA_Kim2011")
         experiment = pybamm.Experiment(
-            ["Charge at 1C until 4.6 V"], period="10 seconds"
+            ["Charge at 1C until 4.2 V"], period="10 seconds"
         )
 
         param["Upper voltage cut-off [V]"] = 4.8
@@ -495,18 +504,6 @@ class TestCasadiSolver(unittest.TestCase):
                 extrap_tol=1e-3,
                 extra_options_setup={"max_num_steps": 500},
             ),
-        )
-        with self.assertRaisesRegex(pybamm.SolverError, "interpolation bounds"):
-            sim.solve()
-
-        ci = param["Initial concentration in positive electrode [mol.m-3]"]
-        param["Initial concentration in positive electrode [mol.m-3]"] = 0.8 * ci
-
-        sim = pybamm.Simulation(
-            model,
-            parameter_values=param,
-            experiment=experiment,
-            solver=pybamm.CasadiSolver(mode="safe", dt_max=0.05),
         )
         with self.assertRaisesRegex(pybamm.SolverError, "interpolation bounds"):
             sim.solve()
@@ -545,7 +542,7 @@ class TestCasadiSolverODEsWithForwardSensitivityEquations(unittest.TestCase):
         p = pybamm.InputParameter("p")
         model.rhs = {var: p * var}
         model.initial_conditions = {var: 1}
-        model.variables = {"var squared": var ** 2}
+        model.variables = {"var squared": var**2}
 
         # Solve
         # Make sure that passing in extra options works
@@ -841,7 +838,7 @@ class TestCasadiSolverODEsWithForwardSensitivityEquations(unittest.TestCase):
         p = pybamm.InputParameter("p")
         model.rhs = {var: p * var}
         model.initial_conditions = {var: 1}
-        model.variables = {"var squared": var ** 2}
+        model.variables = {"var squared": var**2}
 
         # Solve
         # Make sure that passing in extra options works
@@ -935,7 +932,7 @@ class TestCasadiSolverDAEsWithForwardSensitivityEquations(unittest.TestCase):
         model.rhs = {var1: p * var1}
         model.algebraic = {var2: 2 * var1 - var2}
         model.initial_conditions = {var1: 1, var2: 2}
-        model.variables = {"var2 squared": var2 ** 2}
+        model.variables = {"var2 squared": var2**2}
 
         # Solve
         # Make sure that passing in extra options works
@@ -974,7 +971,7 @@ class TestCasadiSolverDAEsWithForwardSensitivityEquations(unittest.TestCase):
         p = pybamm.InputParameter("p")
         model.algebraic = {var: var - p * pybamm.t}
         model.initial_conditions = {var: 0}
-        model.variables = {"var squared": var ** 2}
+        model.variables = {"var squared": var**2}
 
         # Solve
         # Make sure that passing in extra options works
@@ -993,7 +990,7 @@ class TestCasadiSolverDAEsWithForwardSensitivityEquations(unittest.TestCase):
         )
         np.testing.assert_allclose(
             solution["var squared"].sensitivities["p"],
-            (2 * 0.1 * solution.t ** 2).reshape(-1, 1),
+            (2 * 0.1 * solution.t**2).reshape(-1, 1),
             atol=1e-7,
         )
 

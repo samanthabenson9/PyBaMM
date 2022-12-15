@@ -32,7 +32,7 @@ class ScipySolver(pybamm.BaseSolver):
         method="BDF",
         rtol=1e-6,
         atol=1e-6,
-        extrap_tol=0,
+        extrap_tol=None,
         extra_options=None,
     ):
         super().__init__(
@@ -85,22 +85,26 @@ class ScipySolver(pybamm.BaseSolver):
         implicit_methods = ["Radau", "BDF", "LSODA"]
         if np.any([self.method in implicit_methods]):
             if model.jac_rhs_eval:
+
                 def jacobian(t, y):
                     return model.jac_rhs_eval(t, y, inputs)
-                extra_options.update(
-                    {"jac": jacobian}
-                )
+
+                extra_options.update({"jac": jacobian})
 
         # rhs equation
-        if model.convert_to_format == 'casadi':
+        if model.convert_to_format == "casadi":
+
             def rhs(t, y):
                 return model.rhs_eval(t, y, inputs).full().reshape(-1)
+
         else:
+
             def rhs(t, y):
                 return model.rhs_eval(t, y, inputs).reshape(-1)
 
         # make events terminal so that the solver stops when they are reached
         if model.terminate_events_eval:
+
             def event_wrapper(event):
                 def event_fn(t, y):
                     return event(t, y, inputs)

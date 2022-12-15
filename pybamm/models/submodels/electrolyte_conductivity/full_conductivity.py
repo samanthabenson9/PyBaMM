@@ -25,14 +25,17 @@ class Full(BaseElectrolyteConductivity):
         super().__init__(param, options=options)
 
     def get_fundamental_variables(self):
-        if self.half_cell:
-            phi_e_n = None
-        else:
-            phi_e_n = pybamm.standard_variables.phi_e_n
-        phi_e_s = pybamm.standard_variables.phi_e_s
-        phi_e_p = pybamm.standard_variables.phi_e_p
+        phi_e_dict = {}
+        for domain in self.options.whole_cell_domains:
+            phi_e_k = pybamm.Variable(
+                f"{domain.capitalize().split()[0]} electrolyte potential",
+                domain=domain,
+                auxiliary_domains={"secondary": "current collector"},
+            )
+            phi_e_k.print_name = f"phi_e_{domain[0]}"
+            phi_e_dict[domain] = phi_e_k
 
-        variables = self._get_standard_potential_variables(phi_e_n, phi_e_s, phi_e_p)
+        variables = self._get_standard_potential_variables(phi_e_dict)
         return variables
 
     def get_coupled_variables(self, variables):
@@ -43,7 +46,7 @@ class Full(BaseElectrolyteConductivity):
         phi_e = variables["Electrolyte potential"]
 
         i_e = (param.kappa_e(c_e, T) * tor * param.gamma_e / param.C_e) * (
-            param.chiT_over_c(c_e, T) * pybamm.grad(c_e) - pybamm.grad(phi_e)
+            param.chiRT_over_Fc(c_e, T) * pybamm.grad(c_e) - pybamm.grad(phi_e)
         )
 
         # Override print_name

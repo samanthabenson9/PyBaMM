@@ -130,7 +130,7 @@ class BasicDFNHalfCell(BaseModel):
 
         # Particle diffusion parameters
         D_w = param.p.prim.D
-        C_w = param.p.prim.cap_init
+        Q_w = param.p.prim.Q_init
         a_R_w = param.p.prim.a_R
         gamma_e = param.c_e_typ / param.p.prim.c_max
         c_w_init = param.p.prim.c_init
@@ -151,7 +151,7 @@ class BasicDFNHalfCell(BaseModel):
         gamma_w = pybamm.Scalar(1)
 
         eps = pybamm.concatenation(eps_s, eps_w)
-        tor = pybamm.concatenation(eps_s ** b_e_s, eps_w ** b_e_w)
+        tor = pybamm.concatenation(eps_s**b_e_s, eps_w**b_e_w)
 
         j_w = (
             2 * j0_w * pybamm.sinh(ne_w / 2 * (phi_s_w - phi_e_w - U_w(c_s_surf_w, T)))
@@ -175,14 +175,14 @@ class BasicDFNHalfCell(BaseModel):
         # The div and grad operators will be converted to the appropriate matrix
         # multiplication at the discretisation stage
         N_s_w = -D_w(c_s_w, T) * pybamm.grad(c_s_w)
-        self.rhs[c_s_w] = -(1 / C_w) * pybamm.div(N_s_w)
+        self.rhs[c_s_w] = -(1 / Q_w) * pybamm.div(N_s_w)
 
         # Boundary conditions must be provided for equations with spatial
         # derivatives
         self.boundary_conditions[c_s_w] = {
             "left": (pybamm.Scalar(0), "Neumann"),
             "right": (
-                -C_w * j_w / a_R_w / gamma_w / D_w(c_s_surf_w, T),
+                -Q_w * j_w / a_R_w / gamma_w / D_w(c_s_surf_w, T),
                 "Neumann",
             ),
         }
@@ -203,7 +203,7 @@ class BasicDFNHalfCell(BaseModel):
         ######################
         # Current in the solid
         ######################
-        sigma_eff_w = sigma_w(T) * eps_s_w ** b_s_w
+        sigma_eff_w = sigma_w(T) * eps_s_w**b_s_w
         i_s_w = -sigma_eff_w * pybamm.grad(phi_s_w)
         self.boundary_conditions[phi_s_w] = {
             "left": (pybamm.Scalar(0), "Neumann"),
@@ -248,7 +248,7 @@ class BasicDFNHalfCell(BaseModel):
         # Current in the electrolyte
         ######################
         i_e = (param.kappa_e(c_e, T) * tor * gamma_e / param.C_e) * (
-            param.chiT_over_c(c_e, T) * pybamm.grad(c_e) - pybamm.grad(phi_e)
+            param.chiRT_over_Fc(c_e, T) * pybamm.grad(c_e) - pybamm.grad(phi_e)
         )
         self.algebraic[phi_e] = pybamm.div(i_e) - j
 

@@ -119,10 +119,9 @@ class TestSymbol(unittest.TestCase):
         self.assertIsInstance(-a, pybamm.Negate)
         self.assertIsInstance(abs(a), pybamm.AbsoluteValue)
         # special cases
-        neg_a = -a
-        self.assertEqual(-neg_a, a)
-        abs_a = abs(a)
-        self.assertEqual(abs(abs_a), abs_a)
+        self.assertEqual(-(-a), a)
+        self.assertEqual(-(a - b), b - a)
+        self.assertEqual(abs(abs(a)), abs(a))
 
         # binary - two symbols
         self.assertIsInstance(a + b, pybamm.Addition)
@@ -130,7 +129,7 @@ class TestSymbol(unittest.TestCase):
         self.assertIsInstance(a * b, pybamm.Multiplication)
         self.assertIsInstance(a @ b, pybamm.MatrixMultiplication)
         self.assertIsInstance(a / b, pybamm.Division)
-        self.assertIsInstance(a ** b, pybamm.Power)
+        self.assertIsInstance(a**b, pybamm.Power)
         self.assertIsInstance(a < b, _Heaviside)
         self.assertIsInstance(a <= b, _Heaviside)
         self.assertIsInstance(a > b, _Heaviside)
@@ -139,11 +138,11 @@ class TestSymbol(unittest.TestCase):
 
         # binary - symbol and number
         self.assertIsInstance(a + 2, pybamm.Addition)
-        self.assertIsInstance(a - 2, pybamm.Subtraction)
+        self.assertIsInstance(2 - a, pybamm.Subtraction)
         self.assertIsInstance(a * 2, pybamm.Multiplication)
         self.assertIsInstance(a @ 2, pybamm.MatrixMultiplication)
-        self.assertIsInstance(a / 2, pybamm.Division)
-        self.assertIsInstance(a ** 2, pybamm.Power)
+        self.assertIsInstance(2 / a, pybamm.Division)
+        self.assertIsInstance(a**2, pybamm.Power)
 
         # binary - number and symbol
         self.assertIsInstance(3 + b, pybamm.Addition)
@@ -156,8 +155,8 @@ class TestSymbol(unittest.TestCase):
         self.assertEqual((3 @ b).children[1], b)
         self.assertIsInstance(3 / b, pybamm.Division)
         self.assertEqual((3 / b).children[1], b)
-        self.assertIsInstance(3 ** b, pybamm.Power)
-        self.assertEqual((3 ** b).children[1], b)
+        self.assertIsInstance(3**b, pybamm.Power)
+        self.assertEqual((3**b).children[1], b)
 
         # error raising
         with self.assertRaisesRegex(
@@ -387,7 +386,8 @@ class TestSymbol(unittest.TestCase):
 
     def test_symbol_visualise(self):
         c = pybamm.Variable("c", "negative electrode")
-        sym = pybamm.div(c * pybamm.grad(c)) + (c / 2 + c - 1) ** 5
+        d = pybamm.Variable("d", "negative electrode")
+        sym = pybamm.div(c * pybamm.grad(c)) + (c / d + c - d) ** 5
         sym.visualise("test_visualize.png")
         self.assertTrue(os.path.exists("test_visualize.png"))
         with self.assertRaises(ValueError):

@@ -38,48 +38,53 @@ class LossActiveMaterial(BaseModel):
         self.x_average = x_average
 
     def get_fundamental_variables(self):
-        domain = self.domain.lower() + " electrode"
+        domain, Domain = self.domain_Domain
+
         if self.x_average is True:
             eps_solid_xav = pybamm.Variable(
-                "X-averaged " + domain + " active material volume fraction",
+                f"X-averaged {domain} electrode active material volume fraction",
                 domain="current collector",
             )
-            eps_solid = pybamm.PrimaryBroadcast(eps_solid_xav, domain)
+            eps_solid = pybamm.PrimaryBroadcast(eps_solid_xav, f"{domain} electrode")
         else:
             eps_solid = pybamm.Variable(
-                self.domain + " electrode active material volume fraction",
-                domain=domain,
+                f"{Domain} electrode active material volume fraction",
+                domain=f"{domain} electrode",
                 auxiliary_domains={"secondary": "current collector"},
             )
         variables = self._get_standard_active_material_variables(eps_solid)
+        lli_due_to_lam = pybamm.Variable(
+            "Loss of lithium due to loss of active material "
+            f"in {domain} electrode [mol]"
+        )
+        variables.update(
+            {
+                "Loss of lithium due to loss of active material "
+                f"in {domain} electrode [mol]": lli_due_to_lam
+            }
+        )
         return variables
 
     def get_coupled_variables(self, variables):
+        domain, Domain = self.domain_Domain
+
         deps_solid_dt = 0
-        lam_option = getattr(self.options, self.domain.lower())[
-            "loss of active material"
-        ]
+        lam_option = getattr(self.options, self.domain)["loss of active material"]
         if "stress" in lam_option:
             # obtain the rate of loss of active materials (LAM) by stress
             # This is loss of active material model by mechanical effects
             if self.x_average is True:
                 stress_t_surf = variables[
-                    "X-averaged "
-                    + self.domain.lower()
-                    + " particle surface tangential stress"
+                    f"X-averaged {domain} particle surface tangential stress"
                 ]
                 stress_r_surf = variables[
-                    "X-averaged "
-                    + self.domain.lower()
-                    + " particle surface radial stress"
+                    f"X-averaged {domain} particle surface radial stress"
                 ]
             else:
                 stress_t_surf = variables[
-                    self.domain + " particle surface tangential stress"
+                    f"{Domain} particle surface tangential stress"
                 ]
-                stress_r_surf = variables[
-                    self.domain + " particle surface radial stress"
-                ]
+                stress_r_surf = variables[f"{Domain} particle surface radial stress"]
 
             beta_LAM = self.domain_param.beta_LAM
             stress_critical = self.domain_param.stress_critical
@@ -99,15 +104,13 @@ class LossActiveMaterial(BaseModel):
         if "reaction" in lam_option:
             if self.x_average is True:
                 a = variables[
-                    "X-averaged "
-                    + self.domain.lower()
-                    + " electrode surface area to volume ratio"
+                    f"X-averaged {domain} electrode surface area to volume ratio"
                 ]
             else:
-                a = variables[self.domain + " electrode surface area to volume ratio"]
+                a = variables[f"{Domain} electrode surface area to volume ratio"]
 
             beta_LAM_sei = self.domain_param.beta_LAM_sei
-            if self.domain == "Negative":
+            if self.domain == "negative":
                 if self.x_average is True:
                     j_sei = variables["X-averaged SEI interfacial current density"]
                 else:
@@ -125,37 +128,55 @@ class LossActiveMaterial(BaseModel):
         return variables
 
     def set_rhs(self, variables):
-        Domain = self.domain + " electrode"
+        domain, Domain = self.domain_Domain
+
         if self.x_average is True:
             eps_solid = variables[
-                "X-averaged " + Domain.lower() + " active material volume fraction"
+                f"X-averaged {domain} electrode active material volume fraction"
             ]
             deps_solid_dt = variables[
-                "X-averaged "
-                + Domain.lower()
-                + " active material volume fraction change"
+                f"X-averaged {domain} electrode active material volume fraction change"
             ]
         else:
-            eps_solid = variables[Domain + " active material volume fraction"]
+            eps_solid = variables[f"{Domain} electrode active material volume fraction"]
             deps_solid_dt = variables[
-                Domain + " active material volume fraction change"
+                f"{Domain} electrode active material volume fraction change"
             ]
 
-        self.rhs = {eps_solid: deps_solid_dt}
+        # Loss of lithium due to loss of active material
+        # See eq 37 in "Sulzer, Valentin, et al. "Accelerated battery lifetime
+        # simulations using adaptive inter-cycle extrapolation algorithm."
+        # Journal of The Electrochemical Society 168.12 (2021): 120531.
+        lli_due_to_lam = variables[
+            "Loss of lithium due to loss of active material "
+            f"in {domain} electrode [mol]"
+        ]
+        # Multiply by mol.m-3 * m3 to get mol
+        c_s_av = variables[f"Average {domain} particle concentration [mol.m-3]"]
+        V = self.domain_param.L * self.param.A_cc
+
+        self.rhs = {
+            # minus sign because eps_solid is decreasing and LLI measures positive
+            lli_due_to_lam: -c_s_av * V * pybamm.x_average(deps_solid_dt),
+            eps_solid: deps_solid_dt,
+        }
 
     def set_initial_conditions(self, variables):
+        domain, Domain = self.domain_Domain
 
         eps_solid_init = self.domain_param.prim.epsilon_s
 
         if self.x_average is True:
             eps_solid_xav = variables[
-                "X-averaged "
-                + self.domain.lower()
-                + " electrode active material volume fraction"
+                f"X-averaged {domain} electrode active material volume fraction"
             ]
             self.initial_conditions = {eps_solid_xav: pybamm.x_average(eps_solid_init)}
         else:
-            eps_solid = variables[
-                self.domain + " electrode active material volume fraction"
-            ]
+            eps_solid = variables[f"{Domain} electrode active material volume fraction"]
             self.initial_conditions = {eps_solid: eps_solid_init}
+
+        lli_due_to_lam = variables[
+            "Loss of lithium due to loss of active material "
+            f"in {domain} electrode [mol]"
+        ]
+        self.initial_conditions[lli_due_to_lam] = pybamm.Scalar(0)

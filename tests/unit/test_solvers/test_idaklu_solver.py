@@ -1,9 +1,13 @@
 #
 # Tests for the KLU Solver class
 #
-import pybamm
-import numpy as np
+from contextlib import redirect_stdout
+import io
 import unittest
+
+import numpy as np
+
+import pybamm
 from tests import get_discretisation_for_testing
 
 
@@ -151,7 +155,7 @@ class TestIDAKLUSolver(unittest.TestCase):
             model.initial_conditions = {u1: 0, u2: 0, u3: 0, v: 1}
 
             disc = pybamm.Discretisation()
-            disc.process_model(model)
+            disc.process_model(model, remove_independent_variables_from_rhs=False)
 
             solver = pybamm.IDAKLUSolver(root_method=root_method)
 
@@ -166,15 +170,15 @@ class TestIDAKLUSolver(unittest.TestCase):
             )
 
             # test that y[3] remains constant
-            np.testing.assert_array_almost_equal(sol.y[3, :], np.ones(sol.t.shape))
+            np.testing.assert_array_almost_equal(sol.y[3], np.ones(sol.t.shape))
 
             # test that y[0] = to true solution
             true_solution = a_value * sol.t
-            np.testing.assert_array_almost_equal(sol.y[0, :], true_solution)
+            np.testing.assert_array_almost_equal(sol.y[0], true_solution)
 
             # test that y[1:3] = to true solution
             true_solution = b_value * sol.t
-            np.testing.assert_array_almost_equal(sol.y[1:3, :], true_solution)
+            np.testing.assert_array_almost_equal(sol.y[1:3], true_solution)
 
     def test_ida_roberts_klu_sensitivities(self):
         # this test implements a python version of the ida Roberts
@@ -245,6 +249,86 @@ class TestIDAKLUSolver(unittest.TestCase):
             dyda_fd = dyda_fd.transpose().reshape(-1, 1)
 
             np.testing.assert_array_almost_equal(dyda_ida, dyda_fd)
+
+    def test_sensitivities_with_events(self):
+        # this test implements a python version of the ida Roberts
+        # example provided in sundials
+        # see sundials ida examples pdf
+        for form in ["casadi", "python", "jax"]:
+            if form == "jax" and not pybamm.have_jax():
+                continue
+            if form == "casadi":
+                root_method = "casadi"
+            else:
+                root_method = "lm"
+            model = pybamm.BaseModel()
+            model.convert_to_format = form
+            u = pybamm.Variable("u")
+            v = pybamm.Variable("v")
+            a = pybamm.InputParameter("a")
+            b = pybamm.InputParameter("b")
+            model.rhs = {u: a * v + b}
+            model.algebraic = {v: 1 - v}
+            model.initial_conditions = {u: 0, v: 1}
+            model.events = [pybamm.Event("1", 0.2 - u)]
+
+            disc = pybamm.Discretisation()
+            disc.process_model(model)
+
+            solver = pybamm.IDAKLUSolver(root_method=root_method)
+
+            t_eval = np.linspace(0, 3, 100)
+            a_value = 0.1
+            b_value = 0.0
+
+            # solve first without sensitivities
+            sol = solver.solve(
+                model,
+                t_eval,
+                inputs={"a": a_value, "b": b_value},
+                calculate_sensitivities=True,
+            )
+
+            # test that y[1] remains constant
+            np.testing.assert_array_almost_equal(sol.y[1, :], np.ones(sol.t.shape))
+
+            # test that y[0] = to true solution
+            true_solution = a_value * sol.t
+            np.testing.assert_array_almost_equal(sol.y[0, :], true_solution)
+
+            # evaluate the sensitivities using idas
+            dyda_ida = sol.sensitivities["a"]
+            dydb_ida = sol.sensitivities["b"]
+
+            # evaluate the sensitivities using finite difference
+            h = 1e-6
+            sol_plus = solver.solve(
+                model, t_eval, inputs={"a": a_value + 0.5 * h, "b": b_value}
+            )
+            sol_neg = solver.solve(
+                model, t_eval, inputs={"a": a_value - 0.5 * h, "b": b_value}
+            )
+            max_index = min(sol_plus.y.shape[1], sol_neg.y.shape[1]) - 1
+            dyda_fd = (sol_plus.y[:, :max_index] - sol_neg.y[:, :max_index]) / h
+            dyda_fd = dyda_fd.transpose().reshape(-1, 1)
+
+            np.testing.assert_array_almost_equal(
+                dyda_ida[: (2 * max_index), :], dyda_fd
+            )
+
+            sol_plus = solver.solve(
+                model, t_eval, inputs={"a": a_value, "b": b_value + 0.5 * h}
+            )
+            sol_neg = solver.solve(
+                model, t_eval, inputs={"a": a_value, "b": b_value - 0.5 * h}
+            )
+            max_index = min(sol_plus.y.shape[1], sol_neg.y.shape[1]) - 1
+            dydb_fd = (sol_plus.y[:, :max_index] - sol_neg.y[:, :max_index]) / h
+            dydb_fd = dydb_fd.transpose().reshape(-1, 1)
+
+            np.testing.assert_array_almost_equal(
+                dydb_ida[: (2 * max_index), :], dydb_fd
+            )
 
     def test_set_atol(self):
         model = pybamm.lithium_ion.DFN()
@@ -362,6 +446,81 @@ class TestIDAKLUSolver(unittest.TestCase):
             model.concatenated_initial_conditions = pybamm.Vector(np.array([[1]]))
             solution = solver.solve(model, t_eval)
             np.testing.assert_array_equal(solution.y, -1)
+
+    def test_options(self):
+        model = pybamm.BaseModel()
+        u = pybamm.Variable("u")
+        v = pybamm.Variable("v")
+        model.rhs = {u: -0.1 * u}
+        model.algebraic = {v: v - u}
+        model.initial_conditions = {u: 1, v: 1}
+        disc = pybamm.Discretisation()
+        disc.process_model(model)
+
+        t_eval = np.linspace(0, 1)
+        solver = pybamm.IDAKLUSolver()
+        soln_base = solver.solve(model, t_eval)
+
+        # test print_stats
+        solver = pybamm.IDAKLUSolver(options={"print_stats": True})
+        f = io.StringIO()
+        with redirect_stdout(f):
+            solver.solve(model, t_eval)
+        s = f.getvalue()
+        self.assertIn("Solver Stats", s)
+
+        solver = pybamm.IDAKLUSolver(options={"print_stats": False})
+        f = io.StringIO()
+        with redirect_stdout(f):
+            solver.solve(model, t_eval)
+        s = f.getvalue()
+        self.assertEqual(len(s), 0)
+
+        # test everything else
+        for jacobian in ["none", "dense", "sparse", "matrix-free", "garbage"]:
+            for linear_solver in [
+                "SUNLinSol_SPBCGS",
+                "SUNLinSol_Dense",
+                "SUNLinSol_KLU",
+                "SUNLinSol_SPFGMR",
+                "SUNLinSol_SPGMR",
+                "SUNLinSol_SPTFQMR",
+                "garbage",
+            ]:
+                for precon in ["none", "BBDP"]:
+                    options = {
+                        "jacobian": jacobian,
+                        "linear_solver": linear_solver,
+                        "preconditioner": precon,
+                    }
+                    solver = pybamm.IDAKLUSolver(options=options)
+                    if (
+                        jacobian == "none"
+                        and (linear_solver == "SUNLinSol_Dense")
+                        or jacobian == "dense"
+                        and (linear_solver == "SUNLinSol_Dense")
+                        or jacobian == "sparse"
+                        and (
+                            linear_solver != "SUNLinSol_Dense"
+                            and linear_solver != "garbage"
+                        )
+                        or jacobian == "matrix-free"
+                        and (
+                            linear_solver != "SUNLinSol_KLU"
+                            and linear_solver != "SUNLinSol_Dense"
+                            and linear_solver != "garbage"
+                        )
+                    ):
+                        works = True
+                    else:
+                        works = False
+
+                    if works:
+                        soln = solver.solve(model, t_eval)
+                        np.testing.assert_array_almost_equal(soln.y, soln_base.y, 5)
+                    else:
+                        with self.assertRaises(ValueError):
+                            soln = solver.solve(model, t_eval)
 
 
 if __name__ == "__main__":
