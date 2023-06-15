@@ -10,3 +10,5 @@ Typical electrolyte diffusivity [m2.s-1],5.35E-10,Peyman MPM,
 Electrolyte diffusivity [m2.s-1],[function]electrolyte_diffusivity_PeymanMPM,,
 Typical electrolyte conductivity [m2.s-1],1.3,Peyman MPM, 
 Electrolyte conductivity [S.m-1],[function]electrolyte_conductivity_PeymanMPM,, 
+Electrolyte saturation pressure [kPa],[function]P_sat,,
+

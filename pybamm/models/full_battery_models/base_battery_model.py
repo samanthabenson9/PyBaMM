@@ -186,6 +186,9 @@ class BatteryModelOptions(pybamm.FuzzyDict):
             * "decomposition": str
                 High temperature SEI, anode, and cathode decompostion. For modeling 
                 battery abuse and thermal runaway. Default is "false".
+            * "venting": str
+                High temperature gas generation and first venting. For modeling 
+                battery abuse and thermal runaway. Default is "none".    
 
     **Extends:** :class:`dict`
     """
@@ -274,6 +277,7 @@ class BatteryModelOptions(pybamm.FuzzyDict):
             "working electrode": ["both", "negative", "positive"],
             "x-average side reactions": ["false", "true"],
             "decomposition": ["false", "true"],
+            "venting": ["none", "pouch"]
         }
 
         default_options = {

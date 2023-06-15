@@ -281,10 +281,10 @@ OKane2022 = {
     "citation": ["OKane2022", "Chen2020"],
 }
 
-# same as Mohtat2020 but includes additional thermal runaway parameters
+# same as Mohtat2020 but includes additional thermal runaway and venting model parameters from Cai 2019
 Tran2023 = {
     "chemistry": "lithium_ion",
-    "cell": "UMBL_Mohtat2020",
+    "cell": "UMBL_Tran2023",
     "negative electrode": "graphite_UMBL_Tran2023",
     "separator": "separator_Mohtat2020",
     "positive electrode": "NMC_UMBL_Tran2023",

@@ -131,6 +131,7 @@ from .models.submodels import (
     porosity,
     thermal,
     decomposition,
+    venting,
     transport_efficiency,
     particle_mechanics,
 )

@@ -73,6 +73,7 @@ class BaseModel(pybamm.BaseBatteryModel):
         self.set_lithium_plating_submodel()
         self.set_total_interface_submodel()
         self.set_decomposition_submodel()
+        self.set_venting_submodel()
 
         if self.half_cell:
             # This also removes "negative electrode" submodels, so should be done last
@@ -414,7 +415,17 @@ class BaseModel(pybamm.BaseBatteryModel):
             self.submodels[
                 "SEI decomposition"
             ] = pybamm.decomposition.NoSeiDecomposition(self.param)
-
+    
+    def set_venting_submodel(self):
+        if "pouch" in self.options["venting"]:
+            self.submodels[
+                "venting"
+            ] = pybamm.venting.PouchVenting(self.param)
+        else:
+             self.submodels[
+                "venting"
+            ] = pybamm.venting.NoPouchVenting(self.param)
+             
     def set_li_metal_counter_electrode_submodels(self):
         self.submodels[
             "counter electrode open circuit potential"
