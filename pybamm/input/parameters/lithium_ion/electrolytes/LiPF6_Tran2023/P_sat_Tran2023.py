@@ -1,4 +1,4 @@
-def P_sat(T):
+def P_sat_Tran2023(T):
     """
     Electrolyte saturation pressure as a function of temperature [K]
 

@@ -79,7 +79,7 @@ class ThermalParameters(BaseParameters):
         self.P_atm = pybamm.Parameter("Atmospheric pressure [kPa]")
         self.E_poron = pybamm.Parameter("Young's modulus of the poron sheet [kPa]")
         self.sigma_0 = pybamm.Parameter("Initial cell compression stress [kPa]")
-        self.L_poron = pybamm.Parameter("Poron sheet thickness [m3]")
+        self.L_poron = pybamm.Parameter("Poron sheet thickness [m]")
         self.V_head_0 = pybamm.Parameter("Initial head space volume [m3]")
         self.A_surf = pybamm.Parameter("Active material surface area [m2]")
         self.m_an = pybamm.Parameter("Mass of the negative electrode active material [kg]")
@@ -140,7 +140,16 @@ class ThermalParameters(BaseParameters):
     def T_amb(self, t):
         """Dimensionless ambient temperature"""
         return (self.T_amb_dim(t) - self.T_ref) / self.Delta_T
-
+    
+    def P_sat_dimensional(self,T):
+        """Dimensional saturation pressure"""
+        inputs = {"Temperature [K]": T}
+        return pybamm.FunctionParameter("Electrolyte saturation pressure [kPa]", inputs)
+    
+    def P_sat(self,T):
+        """Dimensionless saturation pressure"""
+        T_dim = self.Delta_T * T + self.T_ref
+        return self.P_sat_dimensional(T_dim)/self.P_crit
 
 class DomainThermalParameters(BaseParameters):
     def __init__(self, domain, main_param):
@@ -235,11 +244,7 @@ class DomainThermalParameters(BaseParameters):
         """Dimensionless current collector thermal conductivity"""
         T_dim = self.main_param.Delta_T * T + self.main_param.T_ref
         return self.lambda_cc_dim(T_dim) / self.main_param.lambda_eff_dim_ref
-    
-    def P_sat(T):
-        """Dimensional saturation pressure"""
-        inputs = {"Temperature [K]": T}
-        return pybamm.FunctionParameter("Electrolyte saturation pressure [kPa]", inputs)
+
 
 
 thermal_parameters = ThermalParameters()

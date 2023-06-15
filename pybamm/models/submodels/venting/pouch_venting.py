@@ -40,6 +40,7 @@ class PouchVenting(pybamm.BaseSubModel):
         L = param.therm.L_poron
         E = param.therm.E_poron
         alpha_cell = param.therm.alpha_cell
+        P_crit = param.therm.P_crit
 
         x_sei = variables["Fraction of Li in SEI"]
         delta_sigma = variables["Cell expansion stress [kPa]"]
@@ -47,24 +48,26 @@ class PouchVenting(pybamm.BaseSubModel):
         T_dimensional = param.Delta_T * T + param.T_ref
         delta_T = param.Delta_T * T
 
-        P_sat = param.P_sat(T_dimensional)
-        n_CO2 = m_an*(x_sei_0 - x_sei)/(2*M_C6)
-        P_CO2 = n_CO2*constants.R*T/V_head
         delta_d = L*delta_sigma/E
         V_head = V_head_0 + A_surf*(delta_d-alpha_cell*delta_T)   
+        P_sat = param.therm.P_sat(T) #dimensionless
+        n_CO2 = m_an*(x_sei_0 - x_sei)/(2*M_C6)
+        P_CO2 = (n_CO2*constants.R*T/V_head/1000)/P_crit
         P_total = P_CO2 + P_sat
+
         
         variables = {
-            "Electrolyte gas saturation pressure [kPa]": P_sat,
-            "CO2 gas pressure [kPa]": P_CO2,
+            "Electrolyte gas saturation pressure [kPa]": P_sat*P_crit,
+            "CO2 gas pressure [kPa]": P_CO2*P_crit,
             "Headspace volume [m3]": V_head,
-            "Total gas pressure [kPa]": P_total,
+            "Total gas pressure [kPa]": P_total*P_crit,
         }
 
         return variables
 
     def set_algebraic(self, variables):
         param = self.param
+        P_crit = param.therm.P_crit
         L = param.therm.L_poron
         E = param.therm.E_poron
         alpha_cell = param.therm.alpha_cell
@@ -75,9 +78,11 @@ class PouchVenting(pybamm.BaseSubModel):
         delta_T = param.Delta_T * T
         delta_sigma = variables["Cell expansion stress [kPa]"]
         P_total = variables["Total gas pressure [kPa]"]        
-        self.algebraic = {delta_sigma: pybamm.maximum(P_total-sigma_0-P_atm, E*alpha_cell*delta_T/L)}
+        self.algebraic = {delta_sigma: pybamm.maximum(P_total-sigma_0-P_atm, E*alpha_cell*delta_T/L)/P_crit} #pybamm.maximum(P_total-sigma_0-P_atm, E*alpha_cell*delta_T/L)
 
     def set_initial_conditions(self, variables):
+        # param = self.param
+        # sigma_0 = param.therm.sigma_0
         delta_sigma = variables["Cell expansion stress [kPa]"]
         self.initial_conditions = {
             delta_sigma: pybamm.Scalar(0), 
