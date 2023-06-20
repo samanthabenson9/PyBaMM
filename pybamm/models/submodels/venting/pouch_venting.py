@@ -41,6 +41,8 @@ class PouchVenting(pybamm.BaseSubModel):
         E = param.therm.E_poron
         alpha_cell = param.therm.alpha_cell
         P_crit = param.therm.P_crit
+        sigma_0 = param.therm.sigma_0
+        P_atm = param.therm.P_atm
 
         x_sei = variables["Fraction of Li in SEI"]
         delta_sigma = variables["Cell expansion stress [kPa]"]
@@ -55,12 +57,16 @@ class PouchVenting(pybamm.BaseSubModel):
         P_CO2 = (n_CO2*constants.R*T/V_head/1000)/P_crit
         P_total = P_CO2 + P_sat
 
+        delta_sigma_gas = P_total-sigma_0-P_atm
+        dleta_sigma_themal_expansion = E*alpha_cell*delta_T/L
+
         
         variables = {
             "Electrolyte gas saturation pressure [kPa]": P_sat*P_crit,
             "CO2 gas pressure [kPa]": P_CO2*P_crit,
             "Headspace volume [m3]": V_head,
             "Total gas pressure [kPa]": P_total*P_crit,
+            
         }
 
         return variables
@@ -100,4 +106,12 @@ class PouchVenting(pybamm.BaseSubModel):
         variables: dict
             The variables in the whole model.
         """
-        pass
+
+        delta_sigma = variables["Cell expansion stress [kPa]"]
+        self.events.append(
+            pybamm.Event(
+                "Switch expansion mode",
+                (P_total-sigma_0-P_atm) - (E*alpha_cell*delta_T/L),
+                pybamm.EventType.DISCONTINUITY,
+            )
+        )
