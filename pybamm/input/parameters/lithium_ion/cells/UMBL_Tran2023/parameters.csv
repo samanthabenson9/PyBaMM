@@ -41,6 +41,6 @@ Poron sheet thickness [m], 0.0024, thickness of two sheets,
 Initial cell compression stress [kPa], 1.511989742044445e+01,,
 Young's modulus of the poron sheet [kPa], 190,, 
 Atmospheric pressure [kPa], 101,,
-Thermal expansion coefficient of the cell [m.K-1], 1e-6,,
+Thermal expansion coefficient of the cell [m.K-1], 1.1e-6,,
 Critical venting pressure [kPa], 1.587731e02,,
 

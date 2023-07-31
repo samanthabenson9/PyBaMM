@@ -50,22 +50,28 @@ class PouchVenting(pybamm.BaseSubModel):
         T_dimensional = param.Delta_T * T + param.T_ref
         delta_T = param.Delta_T * T
 
-        delta_d = L*delta_sigma/E
+        delta_d = L/E*delta_sigma
         V_head = V_head_0 + A_surf*(delta_d-alpha_cell*delta_T)   
-        P_sat = param.therm.P_sat(T) #dimensionless
+        P_sat = param.therm.P_sat(T_dimensional) #dimensionless
         n_CO2 = m_an*(x_sei_0 - x_sei)/(2*M_C6)
-        P_CO2 = (n_CO2*constants.R*T/V_head/1000)/P_crit
-        P_total = P_CO2 + P_sat
+        P_CO2 = (n_CO2*constants.R*T_dimensional/V_head/1000) #kPa
+        P_total = P_CO2 + P_sat 
 
         delta_sigma_gas = P_total-sigma_0-P_atm
-        dleta_sigma_themal_expansion = E*alpha_cell*delta_T/L
+        delta_sigma_themal_expansion = E*alpha_cell*delta_T/L
 
         
         variables = {
-            "Electrolyte gas saturation pressure [kPa]": P_sat*P_crit,
-            "CO2 gas pressure [kPa]": P_CO2*P_crit,
+            "Electrolyte gas saturation pressure": P_sat/P_crit,
+            "CO2 gas pressure": P_CO2/P_crit,
+            "Total gas pressure": P_total/P_crit,
+            "Headspace volume": V_head/V_head_0,
+
+            "Electrolyte gas saturation pressure [kPa]": P_sat,
+            "CO2 gas pressure [kPa]": P_CO2,
+            "Total gas pressure [kPa]": P_total,
             "Headspace volume [m3]": V_head,
-            "Total gas pressure [kPa]": P_total*P_crit,
+
             
         }
 
@@ -84,8 +90,9 @@ class PouchVenting(pybamm.BaseSubModel):
         delta_T = param.Delta_T * T
         delta_sigma = variables["Cell expansion stress [kPa]"]
         P_total = variables["Total gas pressure [kPa]"]        
-        self.algebraic = {delta_sigma: pybamm.maximum(P_total-sigma_0-P_atm, E*alpha_cell*delta_T/L)/P_crit} #pybamm.maximum(P_total-sigma_0-P_atm, E*alpha_cell*delta_T/L)
-
+        self.algebraic = {
+            delta_sigma: delta_sigma - pybamm.maximum(P_total-sigma_0-P_atm, E*alpha_cell*delta_T/L)
+            } 
     def set_initial_conditions(self, variables):
         # param = self.param
         # sigma_0 = param.therm.sigma_0
@@ -94,24 +101,32 @@ class PouchVenting(pybamm.BaseSubModel):
             delta_sigma: pybamm.Scalar(0), 
             }
         
-    def set_events(self, variables):
-        """
-        A method to set events related to the state of submodel variable. Note: this
-        method modifies the state of self.events. Unless overwritten by a submodel, the
-        default behaviour of 'pass' is used a implemented in
-        :class:`pybamm.BaseSubModel`.
+    # def set_events(self, variables):
+    #     """
+    #     A method to set events related to the state of submodel variable. Note: this
+    #     method modifies the state of self.events. Unless overwritten by a submodel, the
+    #     default behaviour of 'pass' is used a implemented in
+    #     :class:`pybamm.BaseSubModel`.
 
-        Parameters
-        ----------
-        variables: dict
-            The variables in the whole model.
-        """
-
-        delta_sigma = variables["Cell expansion stress [kPa]"]
-        self.events.append(
-            pybamm.Event(
-                "Switch expansion mode",
-                (P_total-sigma_0-P_atm) - (E*alpha_cell*delta_T/L),
-                pybamm.EventType.DISCONTINUITY,
-            )
-        )
+    #     Parameters
+    #     ----------
+    #     variables: dict
+    #         The variables in the whole model.
+    #     """
+    #     param = self.param
+    #     sigma_0 = param.therm.sigma_0
+    #     P_atm = param.therm.P_atm
+    #     E = param.therm.E_poron
+    #     L = param.therm.L_poron
+    #     alpha_cell = param.therm.alpha_cell
+    #     T = variables["X-averaged negative electrode temperature"]
+    #     delta_T = param.Delta_T * T
+    #     # delta_sigma = variables["Cell expansion stress [kPa]"]
+    #     P_total = variables["Total gas pressure [kPa]"]
+    #     self.events.append(
+    #         pybamm.Event(
+    #             "Switch expansion mode",
+    #             (P_total-sigma_0-P_atm) - (E*alpha_cell*delta_T/L),
+    #             pybamm.EventType.DISCONTINUITY,
+    #         )
+    #     )

@@ -417,7 +417,7 @@ class BaseModel(pybamm.BaseBatteryModel):
             ] = pybamm.decomposition.NoSeiDecomposition(self.param)
     
     def set_venting_submodel(self):
-        if "pouch" in self.options["venting"]:
+        if "true" in self.options["venting"]:
             self.submodels[
                 "venting"
             ] = pybamm.venting.PouchVenting(self.param)
