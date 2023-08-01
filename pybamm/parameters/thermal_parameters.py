@@ -84,6 +84,11 @@ class ThermalParameters(BaseParameters):
         self.A_surf = pybamm.Parameter("Active material surface area [m2]")
         self.m_an = pybamm.Parameter("Mass of the negative electrode active material [kg]")
         self.M_an = pybamm.Parameter("Molar mass of negative electrode active material [kg.mol-1]")
+        
+        # Three-state yz-plane thermal parameters  
+        self.gamma_core = pybamm.Parameter("Ratio of core section to cell length")
+        self.gamma_mid = pybamm.Parameter("Ratio of middle section to cell length")
+        self.gamma_outer = pybamm.Parameter("Ratio of outer section to cell length")
 
     def T_amb_dim(self, t):
         """Dimensional ambient temperature"""

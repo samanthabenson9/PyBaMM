@@ -41,8 +41,9 @@ class CathodeDecomposition(pybamm.BaseSubModel):
             * pybamm.exp(-param.therm.E_ca/(k_b*T_av_dimensional))
         ) # units 1/s
 
-        Q_scale = param.i_typ * param.potential_scale / param.L_x
-        Q_exo_ca = rho_p_dim * param.therm.h_ca * r_ca_dimensional / Q_scale
+        m_ca = rho_p_dim * param.L_y * param.L_z * param.p.L
+        Q_scale = param.i_typ * param.potential_scale /param.L_x
+        Q_exo_ca = m_ca * param.therm.h_ca * r_ca_dimensional / Q_scale 
 
         variables = {
             "Cathode decomposition reaction rate [s-1]": r_ca_dimensional,

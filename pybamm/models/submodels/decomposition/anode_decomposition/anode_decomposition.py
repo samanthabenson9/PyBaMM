@@ -45,8 +45,9 @@ class AnodeDecomposition(pybamm.BaseSubModel):
             * pybamm.exp(-z / param.therm.z_0)
         )  # units 1/s
 
+        m_an = rho_n_dim * param.L_y * param.L_z * param.n.L
         Q_scale = param.i_typ * param.potential_scale / param.L_x
-        Q_exo_an = -rho_n_dim * param.therm.h_an * r_an_dimensional / Q_scale # original units W.m-3
+        Q_exo_an = -m_an * param.therm.h_an * r_an_dimensional/ Q_scale # original units W.m-3
 
         variables = {
             "Anode decomposition reaction rate [s-1]": r_an_dimensional,

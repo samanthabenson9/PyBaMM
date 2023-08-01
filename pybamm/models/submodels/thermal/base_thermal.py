@@ -94,7 +94,7 @@ class BaseThermal(pybamm.BaseSubModel):
         Q_scale = param.i_typ * param.potential_scale / param.L_x # moved to accommodate tabbing I^2R
         I = variables["Current [A]"]
         R_tab = pybamm.Parameter("Tabbing resistance [Ohm]")
-        Q_tabbing = I**2*R_tab/ param.V_cell/Q_scale*0.5 # originally W.m-3
+        Q_tabbing = I**2*R_tab/ param.V_cell/Q_scale*0 # originally W.m-3
 
         # Ohmic heating in solid
         i_s_p = variables["Positive electrode current density"]
@@ -149,11 +149,18 @@ class BaseThermal(pybamm.BaseSubModel):
         Q_ohm = Q_ohm_s + Q_ohm_e + Q_tabbing
 
         # Side reaction heating
-        Q_decomposition_an = variables["Anode decomposition heating"]
-        Q_decomposition_sei = variables["SEI decomposition heating"]
-        Q_decomposition_ca = variables["Cathode decomposition heating"]
-        Q_decomposition_n = Q_decomposition_an + Q_decomposition_sei
-        Q_decomposition_p = Q_decomposition_ca
+        Q_decomp_an = variables["Anode decomposition heating"]
+        Q_decomp_sei = variables["SEI decomposition heating"]
+        Q_decomp_ca = variables["Cathode decomposition heating"]
+        Q_decomp_n = Q_decomp_an + Q_decomp_sei
+        Q_decomp_p = Q_decomp_ca
+        # Q_decomp = pybamm.concatenation(
+        #     *[
+        #         Q_decomp_n,
+        #         pybamm.FullBroadcast(0, ["separator"], "current collector"),
+        #         Q_decomp_p,
+        #     ]
+        # )
 
         # Irreversible electrochemical heating
         a_p = variables["Positive electrode surface area to volume ratio"]
@@ -167,8 +174,8 @@ class BaseThermal(pybamm.BaseSubModel):
             a_n = variables["Negative electrode surface area to volume ratio"]
             j_n = variables["Negative electrode interfacial current density"]
             eta_r_n = variables["Negative electrode reaction overpotential"]
-            Q_rxn_n = a_n * j_n * eta_r_n + Q_decomposition_n
-        Q_rxn_p = a_p * j_p * eta_r_p + Q_decomposition_p
+            Q_rxn_n = a_n * j_n * eta_r_n + Q_decomp_n
+        Q_rxn_p = a_p * j_p * eta_r_p + Q_decomp_p
         Q_rxn = pybamm.concatenation(
             *[
                 Q_rxn_n,
@@ -198,7 +205,7 @@ class BaseThermal(pybamm.BaseSubModel):
         )
 
         # Total heating
-        Q = Q_ohm + Q_rxn + Q_rev
+        Q = Q_ohm + Q_rxn + Q_rev #+ Q_decomp
 
         # Compute the X-average over the entire cell, including current collectors
         Q_ohm_av = self._x_average(Q_ohm, Q_ohm_s_cn, Q_ohm_s_cp)
