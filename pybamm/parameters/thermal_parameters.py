@@ -84,7 +84,10 @@ class ThermalParameters(BaseParameters):
         self.A_surf = pybamm.Parameter("Active material surface area [m2]")
         self.m_an = pybamm.Parameter("Mass of the negative electrode active material [kg]")
         self.M_an = pybamm.Parameter("Molar mass of negative electrode active material [kg.mol-1]")
-        
+        self.M_e = pybamm.Parameter("Molar mass of electrolyte [kg.mol-1]")
+        self.rho_e = pybamm.Parameter("Density of electrolyte [kg.m-3]")
+        self.m_e_0 = pybamm.Parameter("Initial amount of electrolyte [kg]")
+
         # Three-state yz-plane thermal parameters  
         self.gamma_core = pybamm.Parameter("Ratio of core section to cell length")
         self.gamma_mid = pybamm.Parameter("Ratio of middle section to cell length")

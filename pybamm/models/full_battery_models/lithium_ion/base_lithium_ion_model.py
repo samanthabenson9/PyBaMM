@@ -358,6 +358,10 @@ class BaseModel(pybamm.BaseBatteryModel):
                     submod = pybamm.active_material.Constant(
                         self.param, domain, self.options, phase
                     )
+                elif lam == "electrolyte dryout":
+                    submod = pybamm.active_material.ElectrolyteDryout(
+                        self.param, domain, self.options, self.x_average
+                    )
                 else:
                     submod = pybamm.active_material.LossActiveMaterial(
                         self.param, domain, self.options, self.x_average

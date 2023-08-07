@@ -233,6 +233,7 @@ class BatteryModelOptions(pybamm.FuzzyDict):
                 "stress-driven",
                 "reaction-driven",
                 "stress and reaction-driven",
+                "electrolyte dryout"
             ],
             "open circuit potential": ["single", "current sigmoid"],
             "operating mode": [

@@ -16,7 +16,7 @@ def P_sat_Tran2023(T):
     :class:`pybamm.Symbol`
         Electrolyte saturation pressure [kPa]
     """
-    P_dmc = 10**(6.4338-1413.0/(T-44.25))*0.7
-    P_ec = 10**(6.4897-1836.57/(T-102.23))*0.3
-    P = P_ec + P_dmc 
+    P_dmc = 10**(6.4338-1413.0/(T-44.25))
+    P_ec = 10**(6.4897-1836.57/(T-102.23))
+    P = P_ec*0.3 + P_dmc*0.7 
     return P

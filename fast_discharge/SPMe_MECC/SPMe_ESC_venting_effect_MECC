@@ -53,7 +53,7 @@ R_ext_list =  [0.0067,0.0145-R_tab_list[1], 0.0067] # 0.0085 (100%), 0.0078 (75%
 for j, soc in enumerate(SOC_0):
 
     # load data import ESC data from file
-    raw_data = pd.read_csv("./fast_discharge/SPMe_MECC/ESC_"+  str(int(SOC_name[j]*100)) + "SOC_full.csv")
+    raw_data = pd.read_csv("ESC_"+  str(int(SOC_name[j]*100)) + "SOC_full.csv")
     esc_start = raw_data[-raw_data['Current Shunt']>1].index[0]
     esc_end = len(raw_data)
     # T_amb = np.mean(raw_data['Cell Temperature'][(raw_data.index < esc_start) & (raw_data['Cell Temperature'] >0)])
