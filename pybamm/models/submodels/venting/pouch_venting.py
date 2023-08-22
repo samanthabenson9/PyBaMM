@@ -26,8 +26,8 @@ class PouchVenting(pybamm.BaseSubModel):
         delta_sigma = pybamm.Variable("Cell expansion stress [kPa]", domain="current collector")
         # a = pybamm.Variable("Effective loss of active material") # Electrode activity
         # s = pybamm.Variable("Electrolyte saturation") # Liquid saturation 
-        eps_p_s = pybamm.Variable("Positive electrode active material volume fraction")
-        eps_n_s = pybamm.Variable("Negative electrode active material volume fraction")
+        # eps_p_s = pybamm.Variable("Positive electrode active material volume fraction")
+        # eps_n_s = pybamm.Variable("Negative electrode active material volume fraction")
         variables = { 
             "Cell expansion stress [kPa]": delta_sigma,
             # "Electrolyte saturation": s,
@@ -88,8 +88,8 @@ class PouchVenting(pybamm.BaseSubModel):
             "Total gas pressure": P_total/P_crit,
             "Headspace volume": V_head/V_head_0,
             "Loss of electrolyte": m_e_loss/m_e_0,
-            "X-averaged positive electrode active material volume fraction": epsilon_p_s*a,
-            "X-averaged negative electrode active material volume fraction": epsilon_n_s*a,
+            # "X-averaged positive electrode active material volume fraction": epsilon_p_s*a,
+            # "X-averaged negative electrode active material volume fraction": epsilon_n_s*a,
 
             "Electrolyte gas saturation pressure [kPa]": P_sat,
             "CO2 gas pressure [kPa]": P_CO2,

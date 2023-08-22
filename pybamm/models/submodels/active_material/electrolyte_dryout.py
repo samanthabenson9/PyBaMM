@@ -52,70 +52,115 @@ class ElectrolyteDryout(BaseModel):
                 auxiliary_domains={"secondary": "current collector"},
             )
         variables = self._get_standard_active_material_variables(eps_solid)
-
-        # a = pybamm.Variable("Effective loss of active material") # Electrode activity
-        # # s = pybamm.Variable("Electrolyte saturation") # Liquid saturation 
-        variables.update({
-        #     # "Electrolyte saturation": s,
-            # "Effective loss of active material": a,
-        })
         return variables
 
     def get_coupled_variables(self, variables):
-        s_loss = variables["Loss of electrolyte"]
-        # a = variables["Effective loss of active material"]
-        # s = variables["Electrolyte saturation"]
-        # variables.update(
-        #     self._get_standard_active_material_change_variables(deps_solid_dt)
-        # )
-        variables.update({
-        #     # "Electrolyte saturation": 1-s_loss,
-            "Effective loss of active material": ((0.5 * (1-s_loss) + 0.5) * (0.5 * pybamm.tanh(15 * ((1-s_loss) - 0.4)) + 0.5)),
-        })
+        deps_solid_dt = 0
+        lam_option = getattr(self.options, self.domain.lower())[
+            "loss of active material"
+        ]
+        if "stress" in lam_option or "dryout"in lam_option:
+            # obtain the rate of loss of active materials (LAM) by stress
+            # This is loss of active material model by mechanical effects
+            if self.x_average is True:
+                stress_t_surf = variables[
+                    "X-averaged "
+                    + self.domain.lower()
+                    + " particle surface tangential stress"
+                ]
+                stress_r_surf = variables[
+                    "X-averaged "
+                    + self.domain.lower()
+                    + " particle surface radial stress"
+                ]
+            else:
+                stress_t_surf = variables[
+                    self.domain + " particle surface tangential stress"
+                ]
+                stress_r_surf = variables[
+                    self.domain + " particle surface radial stress"
+                ]
+
+            beta_LAM = self.domain_param.beta_LAM
+            stress_critical = self.domain_param.stress_critical
+            m_LAM = self.domain_param.m_LAM
+
+            stress_h_surf = (stress_r_surf + 2 * stress_t_surf) / 3
+            # compressive stress make no contribution
+            # stress_h_surf1 = stress_h_surf
+            # stress_h_surf2 = stress_h_surf
+            # stress_h_surf1 *= stress_h_surf1 > 0
+            # stress_h_surf2 *= stress_h_surf2 < 0
+            # stress_h_surf = (stress_h_surf1+stress_h_surf2)
+            stress_h_surf *= stress_h_surf < 0
+            # assuming the minimum hydrostatic stress is zero for full cycles
+            stress_h_surf_min = stress_h_surf * 0
+            j_stress_LAM = (
+                -beta_LAM
+                * (abs(stress_h_surf - stress_h_surf_min) / stress_critical) ** m_LAM
+            )
+            deps_solid_dt += j_stress_LAM
+
+        if "reaction" in lam_option:
+            if self.x_average is True:
+                a = variables[
+                    "X-averaged "
+                    + self.domain.lower()
+                    + " electrode surface area to volume ratio"
+                ]
+            else:
+                a = variables[self.domain + " electrode surface area to volume ratio"]
+
+            beta_LAM_sei = self.domain_param.beta_LAM_sei
+            if self.domain == "Negative":
+                if self.x_average is True:
+                    j_sei = variables["X-averaged SEI interfacial current density"]
+                else:
+                    j_sei = variables["SEI interfacial current density"]
+            else:
+                # No SEI in the positive electrode so no reaction-driven LAM
+                # until other reactions are implemented
+                j_sei = 0
+
+            j_stress_reaction = beta_LAM_sei * a * j_sei
+            deps_solid_dt += j_stress_reaction
+        variables.update(
+            self._get_standard_active_material_change_variables(deps_solid_dt)
+        )
         return variables
 
-    def set_algebraic(self, variables):
-        # s_loss = variables["Loss of electrolyte"]   
+    def set_rhs(self, variables):
         Domain = self.domain + " electrode"
         if self.x_average is True:
             eps_solid = variables[
                 "X-averaged " + Domain.lower() + " active material volume fraction"
             ]
-        else: 
-            eps_solid = variables[
-                Domain + " active material volume fraction"]
-        a = pybamm.maximum(pybamm.minimum(variables["Effective loss of active material"],1),0)   
-        # s = variables["Electrolyte saturation"]
-        self.algebraic = {
-            # s: s-(1-s_loss*200), 
-            # a: a- ((0.5 * s + 0.5) * (0.5 * pybamm.tanh(15 * (s - 0.4)) + 0.5)),
-            eps_solid: eps_solid - a*eps_solid,
-            }
+            deps_solid_dt = variables[
+                "X-averaged "
+                + Domain.lower()
+                + " active material volume fraction change"
+            ]
+        else:
+            eps_solid = variables[Domain + " active material volume fraction"]
+            deps_solid_dt = variables[
+                Domain + " active material volume fraction change"
+            ]
+
+        self.rhs = {eps_solid: deps_solid_dt}
 
     def set_initial_conditions(self, variables):
 
         eps_solid_init = self.domain_param.prim.epsilon_s
-        a = variables["Effective loss of active material"]
-        # s = variables["Electrolyte saturation"] 
+
         if self.x_average is True:
             eps_solid_xav = variables[
                 "X-averaged "
                 + self.domain.lower()
                 + " electrode active material volume fraction"
             ]
-
-            self.initial_conditions = {
-                eps_solid_xav: pybamm.x_average(eps_solid_init),
-                # a: pybamm.Scalar(1),
-                # s: pybamm.Scalar(1),
-                }
-
+            self.initial_conditions = {eps_solid_xav: pybamm.x_average(eps_solid_init)}
         else:
             eps_solid = variables[
                 self.domain + " electrode active material volume fraction"
             ]
-            self.initial_conditions = {
-                eps_solid: eps_solid_init,
-                # a: pybamm.Scalar(1),
-                # s: pybamm.Scalar(1),
-            }
+            self.initial_conditions = {eps_solid: eps_solid_init}
