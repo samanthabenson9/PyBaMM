@@ -79,15 +79,13 @@ class PouchVenting(pybamm.BaseSubModel):
         V_e_loss = m_e_loss/rho_e  # [m3]
 
         s_loss = m_e_loss/m_e_0
-        s =  (1-s_loss*400)
-        a = ((0.5 * s + 0.5) * (0.5 * pybamm.tanh(15 * (s - 0.4)) + 0.5))
 
         variables.update({
             "Electrolyte gas saturation pressure": P_sat/P_crit,
             "CO2 gas pressure": P_CO2/P_crit,
             "Total gas pressure": P_total/P_crit,
             "Headspace volume": V_head/V_head_0,
-            "Loss of electrolyte": m_e_loss/m_e_0,
+            "Loss of electrolyte": s_loss,
             # "X-averaged positive electrode active material volume fraction": epsilon_p_s*a,
             # "X-averaged negative electrode active material volume fraction": epsilon_n_s*a,
 

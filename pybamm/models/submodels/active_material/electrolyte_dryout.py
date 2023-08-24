@@ -68,8 +68,8 @@ class ElectrolyteDryout(BaseModel):
     def set_algebraic(self, variables):
         eps_solid_init = self.domain_param.prim.epsilon_s
         s_loss = variables["Loss of electrolyte"]
-        s = (1-s_loss*100) #(1-s_loss*200)
-        a0 = ((0.5 * s + 0.5) * (0.5 * pybamm.tanh(15 * (s - 0.4)) + 0.5))
+        s = (1-s_loss*50) # liquid saturation 
+        a0 = (0.5*s+0.5)*(0.5 * pybamm.tanh((s + 1)) + 0.5)
         Domain = self.domain + " electrode"
         if self.x_average is True:
             eps_solid = variables[
