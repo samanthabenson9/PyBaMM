@@ -3,14 +3,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import math
-import dfols
-import signal
 from scipy.integrate import solve_ivp
-from scipy.fft import fft, fftfreq, fftshift
-from scipy.signal import savgol_filter
-from scipy.signal import find_peaks
-from scipy import interpolate
-from stopit import threading_timeoutable as timeoutable
+
 
 def set_rc_params(rcParams):
 
