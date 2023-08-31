@@ -6,3 +6,6 @@ Data files not included in this repo, please download from
 Ensure to paste the data in the corresponding subfolders.
 
 - Run [run_model.ipynb](./run_model.ipynb) to simulate Aging for all cells at room temperature
+  - Includes Resistance simulations
+  - Includes Expansion simulations
+  - Generates figures in the results section of the paper. 
