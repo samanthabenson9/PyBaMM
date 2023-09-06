@@ -23,8 +23,8 @@ cd degradation_model
 ## Data
 The model requires cycling data, RPT data, resistance and eSOH data. These data files not included in this repo due to upload size limitations. Please download from this [Google Drive Folder](https://drive.google.com/drive/folders/16uwOXhK_kvs6xNQBIiVQT5VzPDkkNnov?usp=sharing) and paste the files in the empty folder named `data` provided. Ensure to paste the data in the corresponding subfolders of `cycling`,`esoh`,`ocv` and `resistance`.
 ## Running the Model
-- Run [run_model.ipynb](../degradation_model/run_model.ipynb) notebook to simulate Aging for all cells at room temperature
-  - Includes Resistance simulations
-  - Includes Expansion simulations
-  - Generates figures in the results section of the paper. 
+- Run [run_model.ipynb](./degradation_model/run_model.ipynb) notebook to simulate aging for all cells at room temperature
+  - Includes resistance simulations
+  - Includes voltage and expansion simulations
+- Run [results_figures.ipynb](../degradation_model/results_figures.ipynb) to generate figures from results section in the paper
 -  Run [other_figures.ipynb](../degradation_model/other_figures.ipynb) to generate figures from other sections in the paper
