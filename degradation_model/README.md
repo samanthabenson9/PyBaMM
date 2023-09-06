@@ -27,4 +27,4 @@ The model requires cycling data, RPT data, resistance and eSOH data. These data 
   - Includes resistance simulations
   - Includes voltage and expansion simulations
 - Run [figures_1.ipynb](../degradation_model/figures_1.ipynb) to generate figures from the Results section in the paper
-- Run [figures_2.ipynb](../degradation_model/2.ipynb) to generate figures from other sections in the paper
+- Run [figures_2.ipynb](../degradation_model/figures_2.ipynb) to generate figures from other sections in the paper
