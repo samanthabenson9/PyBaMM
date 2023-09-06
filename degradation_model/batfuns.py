@@ -1199,7 +1199,7 @@ def load_cycling_data(cell,eSOH_DIR,oCV_DIR,cyc_DIR,cyc_no):
         N1 = cyc_data_raw1["Cycle number"].iloc[-2]-2
     else:
         N1 = cycles[cyc_no]
-    print(N1)
+    # print(N1)
     cyc_data_raw = cyc_data_raw1[ cyc_data_raw1['Cycle number'] == N1 ]
     cyc_data = cyc_data_raw.reset_index(drop=True)
     t_c1 = cyc_data['Time [s]']-cyc_data['Time [s]'][0]
@@ -1222,3 +1222,186 @@ def load_cycling_data(cell,eSOH_DIR,oCV_DIR,cyc_DIR,cyc_no):
     Q = integrate.cumtrapz(I,t, initial=0)/3600 #Ah
     
     return t,V,I,Q,E
+
+def cyc_comp_dh_ch(cyc_no,eSOH,parameter_values,spm,Ns,c_rate_c,c_rate_d):
+    # dfo = dfo_0[dfo_0['N']==N[cyc_no]]
+    model = spm
+    Vmin = 3.0
+    Vmax = 4.2
+    esoh_model = pybamm.lithium_ion.ElectrodeSOH()
+    esoh_sim = pybamm.Simulation(esoh_model, parameter_values=parameter_values)
+    param = model.param
+    Cn = eSOH["C_n"][Ns[cyc_no]]
+    # print(Cn)
+    Cp = eSOH["C_p"][Ns[cyc_no]]
+    c_n_max = parameter_values.evaluate(param.n.prim.c_max)
+    c_p_max = parameter_values.evaluate(param.p.prim.c_max)
+    n_Li_init = eSOH["Total lithium in particles [mol]"][Ns[cyc_no]]
+    eps_n_data = parameter_values.evaluate(Cn*3600/(param.n.L * param.n.prim.c_max * param.F* param.A_cc))
+    eps_p_data = parameter_values.evaluate(Cp*3600/(param.p.L * param.p.prim.c_max * param.F* param.A_cc))
+    del_sei = eSOH['X-averaged SEI thickness [m]'][Ns[cyc_no]]
+    c_plated_Li = eSOH['X-averaged lithium plating concentration [mol.m-3]'][Ns[cyc_no]]
+    esoh_sol = esoh_sim.solve(
+        [0],
+        inputs={"V_min": Vmin, "V_max": Vmax, "C_n": Cn, "C_p": Cp, "n_Li": n_Li_init},
+        solver=pybamm.AlgebraicSolver(),
+    )
+
+    parameter_values.update(
+        {
+            "Initial concentration in negative electrode [mol.m-3]": esoh_sol[
+       "x_100"
+            ].data[0]
+            * c_n_max,
+            "Initial concentration in positive electrode [mol.m-3]": esoh_sol[
+                "y_100"
+            ].data[0]
+            * c_p_max,
+            "Negative electrode active material volume fraction": eps_n_data,
+            "Positive electrode active material volume fraction": eps_p_data,
+            "Initial temperature [K]": 273.15+25,
+            "Ambient temperature [K]": 273.15+25,
+            "Initial inner SEI thickness [m]": 0e-09,
+            # "Initial outer SEI thickness [m]": 5e-09,
+            "Initial outer SEI thickness [m]": del_sei,
+            "Initial plated lithium concentration [mol.m-3]": c_plated_Li,        
+        }
+    )
+    dis_set = " until 3V"
+
+    if c_rate_d=="C/5":
+        timestep = '1 sec'
+    else:
+        timestep = '1 sec'
+
+    experiment_cyc_comp_ch = pybamm.Experiment(
+        [
+            "Discharge at "+c_rate_d+dis_set,
+            "Rest for 10 sec",
+            "Charge at "+c_rate_c+" until 4.2V", 
+            "Hold at 4.2V until C/100",
+            # "Rest for 10 sec",
+            # "Discharge at "+c_rate_d+dis_set,
+        ],
+        period=timestep,
+    )
+    sim_exp = pybamm.Simulation(
+        model, experiment=experiment_cyc_comp_ch, parameter_values=parameter_values,
+        solver=pybamm.CasadiSolver(mode="safe", rtol=1e-6, atol=1e-6,dt_max=0.1),
+    )
+    sol_exp = sim_exp.solve()
+    t_t = sol_exp["Time [s]"].entries
+    I_t = sol_exp["Current [A]"].entries
+    Q_t = -sol_exp['Discharge capacity [A.h]'].entries
+    Vt_t = sol_exp["Terminal voltage [V]"].entries
+    exp_t = 30e6*sol_exp["Cell thickness change [m]"].entries
+    idx = np.where(np.diff(np.sign(-I_t)))[0]
+    I = I_t
+    t = t_t-t_t[0]
+    Q = Q_t-Q_t[0]
+    Vt = Vt_t
+    Exp = exp_t-exp_t[0]
+
+    return t,I,Q,Vt,Exp,sol_exp
+
+def cyc_comp_ch_dh(cyc_no,eSOH,t_d,Q_d,V_d,E_d,parameter_values,spm,Ns,c_rate_c,c_rate_d):
+    # dfo = dfo_0[dfo_0['N']==N[cyc_no]]
+    model = spm
+    Vmin = 3.0
+    Vmax = 4.2
+    esoh_model = pybamm.lithium_ion.ElectrodeSOH()
+    esoh_sim = pybamm.Simulation(esoh_model, parameter_values=parameter_values)
+    param = model.param
+    Cn = eSOH["C_n"][Ns[cyc_no]]
+    # print(Cn)
+    Cp = eSOH["C_p"][Ns[cyc_no]]
+    c_n_max = parameter_values.evaluate(param.n.prim.c_max)
+    c_p_max = parameter_values.evaluate(param.p.prim.c_max)
+    n_Li_init = eSOH["Total lithium in particles [mol]"][Ns[cyc_no]]
+    eps_n_data = parameter_values.evaluate(Cn*3600/(param.n.L * param.n.prim.c_max * param.F* param.A_cc))
+    eps_p_data = parameter_values.evaluate(Cp*3600/(param.p.L * param.p.prim.c_max * param.F* param.A_cc))
+    del_sei = eSOH['X-averaged SEI thickness [m]'][Ns[cyc_no]]
+    c_plated_Li = eSOH['X-averaged lithium plating concentration [mol.m-3]'][Ns[cyc_no]]
+    esoh_sol = esoh_sim.solve(
+        [0],
+        inputs={"V_min": Vmin, "V_max": Vmax, "C_n": Cn, "C_p": Cp, "n_Li": n_Li_init},
+        solver=pybamm.AlgebraicSolver(),
+    )
+
+    parameter_values.update(
+        {
+            "Initial concentration in negative electrode [mol.m-3]": esoh_sol[
+       "x_100"
+            ].data[0]
+            * c_n_max,
+            "Initial concentration in positive electrode [mol.m-3]": esoh_sol[
+                "y_100"
+            ].data[0]
+            * c_p_max,
+            "Negative electrode active material volume fraction": eps_n_data,
+            "Positive electrode active material volume fraction": eps_p_data,
+            "Initial temperature [K]": 273.15+25,
+            "Ambient temperature [K]": 273.15+25,
+            "Initial inner SEI thickness [m]": 0e-09,
+            # "Initial outer SEI thickness [m]": 5e-09,
+            "Initial outer SEI thickness [m]": del_sei,
+            "Initial plated lithium concentration [mol.m-3]": c_plated_Li,        
+        }
+    )
+    dis_set = " until 3V"
+
+    if c_rate_d=="C/5":
+        timestep = '10 sec'
+    else:
+        timestep = '1 sec'
+
+    experiment_cyc_comp_ch = pybamm.Experiment(
+        [
+            "Discharge at "+c_rate_d+dis_set,
+            "Rest for 10 sec",
+            "Charge at "+c_rate_c+" until 4.2V", 
+            "Hold at 4.2V until C/100",
+            "Rest for 10 sec",
+            "Discharge at "+c_rate_d+dis_set,
+        ],
+        period=timestep,
+    )
+    sim_exp = pybamm.Simulation(
+        model, experiment=experiment_cyc_comp_ch, parameter_values=parameter_values,
+        solver=pybamm.CasadiSolver(mode="safe", rtol=1e-6, atol=1e-6,dt_max=0.1),
+    )
+    sol_exp = sim_exp.solve()
+    t_t = sol_exp["Time [s]"].entries
+    I_t = sol_exp["Current [A]"].entries
+    Q_t = -sol_exp['Discharge capacity [A.h]'].entries
+    Vt_t = sol_exp["Terminal voltage [V]"].entries
+    exp_t = 30e6*sol_exp["Cell thickness change [m]"].entries
+    idx = np.where(np.diff(np.sign(-I_t)))[0]
+    I = I_t[idx[0]:]
+    t = t_t[idx[0]:]-t_t[idx[0]]
+    Q = Q_t[idx[0]:]-Q_t[idx[0]]
+    Vt = Vt_t[idx[0]:]
+    Exp = exp_t[idx[0]:]-exp_t[idx[0]]
+
+    if max(t)<max(t_d):
+        int_V = interpolate.CubicSpline(t_d,V_d,extrapolate=True)
+        rmse_V = pybamm.rmse(Vt,int_V(t))
+        int_E = interpolate.CubicSpline(t_d,E_d,extrapolate=True)
+        rmse_E = pybamm.rmse(Exp,int_E(t))
+        # int_VQ = interpolate.CubicSpline(Q_d,V_d,extrapolate=True)
+        # rmse_VQ = pybamm.rmse(Vt,int_VQ(Q))
+        # int_EQ = interpolate.CubicSpline(Q_d,E_d,extrapolate=True)
+        # rmse_EQ = pybamm.rmse(Exp,int_EQ(Q))
+    else:
+        int_V = interpolate.CubicSpline(t,Vt,extrapolate=True)
+        rmse_V = pybamm.rmse(V_d,int_V(t_d))
+        int_E = interpolate.CubicSpline(t,Exp,extrapolate=True)
+        rmse_E = pybamm.rmse(E_d,int_E(t_d))
+        # int_VQ = interpolate.CubicSpline(Q[1:],Vt[1:],extrapolate=True)
+        # rmse_VQ = pybamm.rmse(V_d,int_VQ(Q_d))
+        # int_EQ = interpolate.CubicSpline(Q[1:],Exp[1:],extrapolate=True)
+        # rmse_EQ = pybamm.rmse(E_d,int_EQ(Q_d))
+    # rmse_V =0
+    # max_V = 0
+    rmse_VQ  = 0 ; rmse_EQ = 0
+    return t,I,Q,Vt,Exp,sol_exp,rmse_V,rmse_E,rmse_VQ,rmse_EQ
