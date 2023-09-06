@@ -26,5 +26,5 @@ The model requires cycling data, RPT data, resistance and eSOH data. These data 
 - Run [run_model.ipynb](./degradation_model/run_model.ipynb) notebook to simulate aging for all cells at room temperature
   - Includes resistance simulations
   - Includes voltage and expansion simulations
-- Run [results_figures.ipynb](./degradation_model/results_figures.ipynb) to generate figures from results section in the paper
--  Run [other_figures.ipynb](./degradation_model/other_figures.ipynb) to generate figures from other sections in the paper
+- Run [figures_1.ipynb](./degradation_model/figures_1.ipynb) to generate figures from the Results section in the paper
+- Run [figures_2.ipynb](./degradation_model/2.ipynb) to generate figures from other sections in the paper
