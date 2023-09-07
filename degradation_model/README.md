@@ -11,9 +11,9 @@ git clone https://github.com/js1tr3/PyBaMM
 https://docs.pybamm.org/en/latest/source/user_guide/installation/install-from-source.html
 
 5. Ensure that you are in the PyBaMM working directory after following instructions in step 4.
-6. Switch to the `deg-model-pub` branch of the PyBaMM fork
+6. Switch to the `gmjuly2022` branch of the PyBaMM fork
 ```
-git checkout deg-model-pub
+git checkout gmjuly2022
 ```
 
 7. Change the working directory to `degradation_model` subfolder
@@ -28,3 +28,7 @@ The model requires cycling data, RPT data, resistance and eSOH data. These data 
   - Includes voltage and expansion simulations
 - Run [figures_1.ipynb](../degradation_model/figures_1.ipynb) to generate figures from the Results section in the paper
 - Run [figures_2.ipynb](../degradation_model/figures_2.ipynb) to generate figures from other sections in the paper
+
+## Parameters
+- Details regarding the location of parameters and how to update them are given in [parameters.md](./parameters.md)
+- Running C/3 and C/20 cycles with the new parameter set is given in [run_cycles.ipynb](./run_cycles.ipynb)
