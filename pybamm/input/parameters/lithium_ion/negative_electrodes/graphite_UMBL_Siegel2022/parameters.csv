@@ -12,7 +12,7 @@ Negative electrode OCP [V],[function]graphite_ocp_Siegel,Siegel 2022, Measured
 # Microstructure,,,
 Negative electrode porosity,0.2,Siegel2022,
 Negative electrode active material volume fraction,0.7545,Siegel2022,rest is binder
-Negative particle radius [m],27E-06,Siegel2022,
+Negative particle radius [m],13.5E-06,Siegel2022,
 Negative electrode Bruggeman coefficient (electrode),1.5,Peyman MPM,
 Negative electrode Bruggeman coefficient (electrolyte),1.5,Peyman MPM,
 Negative electrode transport efficiency, 0.16,
