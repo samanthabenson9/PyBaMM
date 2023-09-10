@@ -40,6 +40,12 @@ class LossActiveMaterial(BaseModel):
     def get_fundamental_variables(self):
         domain = self.domain.lower() + " electrode"
         if self.x_average is True:
+            n_nickel_diss_xav = pybamm.Variable(
+                "X-averaged " + domain + " loss nickel dissolution",
+                domain="current collector",
+            )
+            n_nickel_diss = pybamm.PrimaryBroadcast(n_nickel_diss_xav, domain)
+            
             eps_solid_xav = pybamm.Variable(
                 "X-averaged " + domain + " active material volume fraction",
                 domain="current collector",
@@ -51,7 +57,7 @@ class LossActiveMaterial(BaseModel):
                 domain=domain,
                 auxiliary_domains={"secondary": "current collector"},
             )
-        variables = self._get_standard_active_material_variables(eps_solid)
+        variables = self._get_standard_active_material_variables(eps_solid, n_nickel_diss)
         return variables
 
     def get_coupled_variables(self, variables):
@@ -114,7 +120,40 @@ class LossActiveMaterial(BaseModel):
             #     -beta_LAM*(abs(stress_h_surf1) / stress_critical) ** m_LAM
             # )
             deps_solid_dt += j_stress_LAM
+            
+            
+            
+##   ##  #####   # Added for dissolution-begin
 
+            if self.domain == "Positive":
+                T_p=variables["Positive electrode temperature"]
+                prefactor_p = 1 / (1 + self.param.Theta * T_p)
+                delta_phi_p=variables["Positive electrode surface potential difference [V]"]
+                eta_diss=delta_phi_p - 4.0  #assuming E_qdiss=4
+                csmax_pos=self.domain_param.prim.c_max
+                thickness_p=self.domain_param.L
+                Time_scale=self.param.timescale 
+                i0_diss=self.domain_param.i0_dissolution
+                c_ss_p = variables["Positive particle surface concentration"]
+                c_save_p = variables["R-averaged positive particle concentration"]
+                
+                
+#                 print(thickness_p)
+                if self.x_average is True:
+                    j_diss= i0_diss*pybamm.exp(prefactor_p * eta_diss)/ csmax_pos / thickness_p /self.param.F
+#                     j_diss_numerator= i0_diss* (c_ss_p-c_save_p) * pybamm.exp(prefactor_p * eta_diss)
+                    deps_diss_dt = j_diss
+#                     deps_diss_dt=-j_diss/ csmax_pos / thickness_p /self.param.F   ################### change                    
+                    
+                    deps_solid_dt +=-deps_diss_dt
+            else:
+                j_diss = 0 * j_stress_LAM
+
+#                     deps_solid_dt +=-.0045* (delta_phi_p)  # Just an output shoing LAM postive *1 
+
+            
+##     ##  ###  ## Added for dissolution-end
+            
         if "reaction" in lam_option:
             if self.x_average is True:
                 a = variables[
@@ -139,7 +178,7 @@ class LossActiveMaterial(BaseModel):
             j_stress_reaction = beta_LAM_sei * a * j_sei
             deps_solid_dt += j_stress_reaction
         variables.update(
-            self._get_standard_active_material_change_variables(deps_solid_dt)
+            self._get_standard_active_material_change_variables(deps_solid_dt, j_diss)
         )
         return variables
 
@@ -154,17 +193,29 @@ class LossActiveMaterial(BaseModel):
                 + Domain.lower()
                 + " active material volume fraction change"
             ]
+            n_nickel_diss = variables[
+                "X-averaged " + Domain.lower() + " loss nickel dissolution"
+            ]
+            j_diss = variables[
+                "X-averaged " + Domain.lower() + " dissolution exchange current"
+            ]
+             
         else:
             eps_solid = variables[Domain + " active material volume fraction"]
             deps_solid_dt = variables[
                 Domain + " active material volume fraction change"
             ]
+            n_nickel_diss = variables[Domain + " loss nickel dissolution"]
+            j_diss = variables[
+                Domain + " dissolution exchange current"
+            ]            
 
-        self.rhs = {eps_solid: deps_solid_dt}
+        self.rhs = {eps_solid: deps_solid_dt, n_nickel_diss:j_diss}
 
     def set_initial_conditions(self, variables):
 
         eps_solid_init = self.domain_param.prim.epsilon_s
+        loss_nick = 0 * self.domain_param.prim.epsilon_s
 
         if self.x_average is True:
             eps_solid_xav = variables[
@@ -172,9 +223,20 @@ class LossActiveMaterial(BaseModel):
                 + self.domain.lower()
                 + " electrode active material volume fraction"
             ]
-            self.initial_conditions = {eps_solid_xav: pybamm.x_average(eps_solid_init)}
+            
+            n_nickel_diss_xav = variables[
+                "X-averaged " + self.domain.lower() + " electrode loss nickel dissolution"#Added Hamid diss
+            ]
+            
+            self.initial_conditions = {eps_solid_xav: pybamm.x_average(eps_solid_init),  n_nickel_diss_xav: pybamm.x_average(loss_nick)}# added Hamid diss
+            
+            
+            
         else:
             eps_solid = variables[
                 self.domain + " electrode active material volume fraction"
             ]
-            self.initial_conditions = {eps_solid: eps_solid_init}
+            eps_solid = variables[
+                self.domain + " electrode loss nickel dissolution"
+            ]            
+            self.initial_conditions = {eps_solid: eps_solid_init, n_nickel_diss: loss_nick}

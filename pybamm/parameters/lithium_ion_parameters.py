@@ -521,7 +521,21 @@ class DomainLithiumIonParameters(BaseParameters):
         self.beta_LAM_sei_dimensional = pybamm.Parameter(
             f"{Domain} electrode reaction-driven LAM factor [m3.mol-1]"
         )
-
+        # Dissolution parameters
+        self.i0_dissolution_dimensional = pybamm.Parameter(## added 3/15/2023
+            f"{Domain} electrode dissolution exchange current density"
+        )
+        
+        self.k_Nickel_SEI = pybamm.Parameter(## added 5/5/2023
+            f"{Domain} electrode dissolution nickel SEI coefficient"
+        )        
+        
+        self.k_Nickel_intercalation = pybamm.Parameter(## added 5/5/2023
+            f"{Domain} electrode dissolution nickel intercalation coefficient"
+        )        
+        
+        
+            
         # utilisation parameters
         self.u_init = pybamm.Parameter(
             f"Initial {domain} electrode interface utilisation"
@@ -597,6 +611,7 @@ class DomainLithiumIonParameters(BaseParameters):
         self.c_0 = self.c_0_dim / self.prim.c_max
         self.beta_LAM = self.beta_LAM_dimensional * main.timescale
         self.beta_LAM2 = self.beta_LAM_dimensional2 * main.timescale
+	self.i0_dissolution = self.i0_dissolution_dimensional * main.timescale  ## added 3/15/2023
         # normalised typical time for one cycle
         self.stress_critical = self.stress_critical_dim / self.E
         self.stress_LAM_min = self.stress_LAM_min_dim / self.E
@@ -809,7 +824,7 @@ class ParticleLithiumIonParameters(BaseParameters):
             inputs,
         )
 
-    def j0_dimensional(self, c_e, c_s_surf, T):
+    def j0_dimensional(self, c_e, c_s_surf, T, N_nick):
         """Dimensional exchange-current density [A.m-2]"""
         inputs = {
             "Electrolyte concentration [mol.m-3]": c_e,
@@ -819,6 +834,8 @@ class ParticleLithiumIonParameters(BaseParameters):
             "Temperature [K]": T,
             f"{self.phase_prefactor}Maximum {self.domain.lower()} particle "
             "surface concentration [mol.m-3]": self.c_max,
+            f"{self.domain} dissolution nickel intercalation coefficient": N_nick,            
+            
         }
         return pybamm.FunctionParameter(
             f"{self.phase_prefactor}{self.domain} electrode "
@@ -889,7 +906,7 @@ class ParticleLithiumIonParameters(BaseParameters):
 
         # Reference exchange-current density
         self.j0_ref_dimensional = (
-            self.j0_dimensional(main.c_e_typ, self.c_max / 2, main.T_ref) * 2
+            self.j0_dimensional(main.c_e_typ, self.c_max / 2, main.T_ref, 0) * 2
         )
 
         # Reaction timescales
@@ -1026,6 +1043,8 @@ class ParticleLithiumIonParameters(BaseParameters):
             )
         )
         self.c_sei_init = self.c_ec_0_dim / self.c_sei_outer_scale
+        self.k_Nickel_SEI = domain_param.k_Nickel_SEI #test
+        
 
     def D(self, c_s, T):
         """Dimensionless particle diffusivity"""
@@ -1033,7 +1052,7 @@ class ParticleLithiumIonParameters(BaseParameters):
         T_dim = self.main_param.Delta_T * T + self.main_param.T_ref
         return self.D_dimensional(sto, T_dim) / self.D_typ_dim
 
-    def j0(self, c_e, c_s_surf, T):
+    def j0(self, c_e, c_s_surf, T, N_nick):
         """Dimensionless exchange-current density"""
         tol = pybamm.settings.tolerances["j0__c_e"]
         c_e = pybamm.maximum(c_e, tol)
@@ -1043,7 +1062,7 @@ class ParticleLithiumIonParameters(BaseParameters):
         c_s_surf_dim = c_s_surf * self.c_max
         T_dim = self.main_param.Delta_T * T + self.main_param.T_ref
 
-        return self.j0_dimensional(c_e_dim, c_s_surf_dim, T_dim) / self.j_scale
+        return self.j0_dimensional(c_e_dim, c_s_surf_dim, T_dim,N_nick) / self.j_scale
 
     def U(self, c_s, T, lithiation=None):
         """Dimensionless open-circuit potential in the electrode"""

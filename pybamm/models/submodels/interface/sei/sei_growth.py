@@ -75,7 +75,9 @@ class SEIGrowth(BaseModel):
         else:
             delta_phi = variables["Negative electrode surface potential difference"]
             phi_s_n = variables["Negative electrode potential"]
-
+            #added for dissolution
+            
+            
         # Look for current that contributes to the -IR drop
         # If we can't find the interfacial current density from the main reaction, j,
         # it's ok to fall back on the total interfacial current density, j_tot
@@ -124,7 +126,11 @@ class SEIGrowth(BaseModel):
         elif self.options["SEI"] == "ec reaction limited":
             C_sei_ec = phase_param.C_sei_ec
             C_ec = phase_param.C_ec
-
+                        
+            k_nick_SEI = phase_param.k_Nickel_SEI
+            n_nick = variables["X-averaged positive electrode loss nickel dissolution"]
+            Multiplier_SEI = 1+k_nick_SEI * n_nick
+            
             # we have a linear system for j_sei and c_ec
             #  c_ec = 1 + j_sei * L_sei * C_ec
             #  j_sei = - C_sei_ec * c_ec * exp()
@@ -134,9 +140,21 @@ class SEIGrowth(BaseModel):
             #  j_sei = -C_sei_ec * exp() / (1 + L_sei * C_ec * C_sei_ec * exp())
             #  c_ec = 1 / (1 + L_sei * C_ec * C_sei_ec * exp())
             C_sei_exp = C_sei_ec * pybamm.exp(-0.5 * prefactor * eta_SEI)
-            j_sei = -C_sei_exp / (1 + L_sei * C_ec * C_sei_exp)
+            j_sei = -C_sei_exp / (1 + L_sei * C_ec * C_sei_exp) * Multiplier_SEI
             c_ec = 1 / (1 + L_sei * C_ec * C_sei_exp)
+            
+            ## Added dissolution-begin
+            ## cathod dissolution added-begin   
+#             T_p=variables["Positive electrode temperature"]
+#             prefactor_p = 1 / (1 + self.param.Theta * T_p)
+#             delta_phi_p=variables["Positive electrode surface potential difference"]
+#             eta_diss=delta_phi_p - 4.0  #assuming E_qdiss=4  
+#             j_diss= 6e-05 * pybamm.exp(prefactor_p * eta_diss)
+            
+            ## Added-dissolution-end
 
+            
+            
             # Get variables related to the concentration
             c_ec_av = pybamm.x_average(c_ec)
             c_ec_scale = phase_param.c_ec_0_dim

@@ -70,10 +70,14 @@ class BaseInterface(pybamm.BaseSubModel):
 
         c_e = variables[f"{Domain} electrolyte concentration"]
         T = variables[f"{Domain} electrode temperature"]
+        
+        N_nick= variables["X-averaged positive electrode loss nickel dissolution"]
 
         if self.reaction == "lithium-ion main":
             # For "particle-size distribution" submodels, take distribution version
             # of c_s_surf that depends on particle size.
+            
+            
             if self.options["particle size"] == "distribution":
                 c_s_surf = variables[
                     f"{Domain} {phase_name}particle surface concentration distribution"
@@ -110,7 +114,7 @@ class BaseInterface(pybamm.BaseSubModel):
                     c_e = c_e.orphans[0]
                     T = T.orphans[0]
 
-            j0 = phase_param.j0(c_e, c_s_surf, T)
+            j0 = phase_param.j0(c_e, c_s_surf, T, N_nick)
 
         elif self.reaction == "lithium metal plating":
             j0 = param.j0_plating(c_e, 1, T)

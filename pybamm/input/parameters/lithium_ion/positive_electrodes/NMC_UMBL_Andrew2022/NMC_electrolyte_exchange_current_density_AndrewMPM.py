@@ -1,7 +1,7 @@
-from pybamm import exp, constants
+from pybamm import exp, constants, Parameter
 
 
-def NMC_electrolyte_exchange_current_density_Siegel(c_e, c_s_surf, c_s_max, T, N_nick):
+def NMC_electrolyte_exchange_current_density_AndrewMPM(c_e, c_s_surf, c_s_max, T, N_nick):
     """
     Exchange-current density for Butler-Volmer reactions between NMC and LiPF6 in
     EC:DMC.
@@ -26,9 +26,12 @@ def NMC_electrolyte_exchange_current_density_Siegel(c_e, c_s_surf, c_s_max, T, N
     :class:`pybamm.Symbol`
         Exchange-current density [A.m-2]
     """
+    m_ref =  Parameter("Positive electrode reference exchange-current density [A.m-2(m3.mol)1.5]")
     m_ref = 4.824 * 10 ** (-6)  # (A/m2)(mol/m3)**1.5 - includes ref concentrations
-    E_r = 39570
+#     E_r = 39570
+    E_r = 0
     arrhenius = exp(E_r / constants.R * (1 / 298.15 - 1 / T))
+#     arrhenius = exp(E_r / constants.R * (1 / 318.15 - 1 / T))
 
     return (
         m_ref * arrhenius * c_e**0.5 * c_s_surf**0.5 * (c_s_max - c_s_surf) ** 0.5

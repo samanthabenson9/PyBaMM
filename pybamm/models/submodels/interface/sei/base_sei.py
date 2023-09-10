@@ -360,6 +360,7 @@ class BaseModel(BaseInterface):
         variables = {
             f"{self.reaction_name}interfacial current density": j_sei,
             f"{self.reaction_name}interfacial current density [A.m-2]": j_sei * j_scale,
+#             "X-averaged Dissolution interfacial current density":j_diss
         }
 
         if self.reaction_loc != "interface":

@@ -210,6 +210,20 @@ Siegel2022 = {
     # "citation": "Siegel2022",
 }
 
+Andrew2022 = {
+    "chemistry": "lithium_ion",
+    "cell": "UMBL_Andrew2022",
+    "negative electrode": "graphite_UMBL_Andrew2022",
+    "separator": "separator_Andrew2022",
+    "positive electrode": "NMC_UMBL_Andrew2022",
+    "electrolyte": "LiPF6_Andrew2022",
+    "experiment": "1C_charge_from_empty_Mohtat2020",
+    "sei": "example",
+    "lithium plating": "mohtat2020_Li_plating",
+    # "citation": "Siegel2022",
+}
+
+
 Ramadass2004 = {
     "chemistry": "lithium_ion",
     "cell": "sony_Ramadass2004",

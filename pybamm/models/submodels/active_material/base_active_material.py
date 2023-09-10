@@ -24,7 +24,7 @@ class BaseModel(pybamm.BaseSubModel):
     def __init__(self, param, domain, options, phase="primary"):
         super().__init__(param, domain, options=options, phase=phase)
 
-    def _get_standard_active_material_variables(self, eps_solid):
+    def _get_standard_active_material_variables(self, eps_solid, n_nickel_diss):
         param = self.param
         phase_name = self.phase_name
         Domain = self.domain
@@ -32,15 +32,25 @@ class BaseModel(pybamm.BaseSubModel):
 
         if eps_solid.domain == []:
             eps_solid = pybamm.PrimaryBroadcast(eps_solid, "current collector")
+            n_nickel_diss = pybamm.PrimaryBroadcast(n_nickel_diss, "current collector")
         if eps_solid.domain == ["current collector"]:
             eps_solid = pybamm.PrimaryBroadcast(eps_solid, domain + " electrode")
+            n_nickel_diss = pybamm.PrimaryBroadcast(n_nickel_diss, domain + " electrode")
+            
         eps_solid_av = pybamm.x_average(eps_solid)
+        n_nickel_diss_av = pybamm.x_average(n_nickel_diss)
+        
 
         variables = {
             f"{Domain} electrode {phase_name}"
             "active material volume fraction": eps_solid,
             f"X-averaged {domain} electrode {phase_name}"
             "active material volume fraction": eps_solid_av,
+            
+            f"{Domain} electrode {phase_name}"
+            "loss nickel dissolution": n_nickel_diss,
+            f"X-averaged {domain} electrode {phase_name}"
+            "loss nickel dissolution": n_nickel_diss_av,                                               
         }
 
         # Update other microstructure variables
@@ -127,20 +137,31 @@ class BaseModel(pybamm.BaseSubModel):
 
             return variables
 
-    def _get_standard_active_material_change_variables(self, deps_solid_dt):
+    def _get_standard_active_material_change_variables(self, deps_solid_dt,j_diss):
         if deps_solid_dt.domain == ["current collector"]:
             deps_solid_dt_av = deps_solid_dt
             deps_solid_dt = pybamm.PrimaryBroadcast(
                 deps_solid_dt_av, self.domain.lower() + " electrode"
             )
+            j_diss_av = j_diss
+            j_diss = pybamm.PrimaryBroadcast(
+                j_diss_av, self.domain.lower() + " electrode"
+            )            
         else:
             deps_solid_dt_av = pybamm.x_average(deps_solid_dt)
+            j_diss_av = pybamm.x_average(j_diss)
 
         variables = {
             f"{self.domain} electrode {self.phase_name}"
             "active material volume fraction change": deps_solid_dt,
             f"X-averaged {self.domain.lower()} electrode {self.phase_name}"
             "active material volume fraction change": deps_solid_dt_av,
+            
+            f"{self.domain} electrode {self.phase_name}"
+            "dissolution exchange current": j_diss,
+            f"X-averaged {self.domain.lower()} electrode {self.phase_name}"
+            "dissolution exchange current": j_diss_av,                        
+            
         }
 
         return variables
