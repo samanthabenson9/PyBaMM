@@ -611,7 +611,7 @@ class DomainLithiumIonParameters(BaseParameters):
         self.c_0 = self.c_0_dim / self.prim.c_max
         self.beta_LAM = self.beta_LAM_dimensional * main.timescale
         self.beta_LAM2 = self.beta_LAM_dimensional2 * main.timescale
-	self.i0_dissolution = self.i0_dissolution_dimensional * main.timescale  ## added 3/15/2023
+        self.i0_dissolution = self.i0_dissolution_dimensional * main.timescale  ## added 3/15/2023
         # normalised typical time for one cycle
         self.stress_critical = self.stress_critical_dim / self.E
         self.stress_LAM_min = self.stress_LAM_min_dim / self.E

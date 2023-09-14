@@ -169,6 +169,15 @@ def cycle_adaptive_simulation(model, parameter_values, experiment,SOC_0=1, save_
                 "X-averaged positive particle concentration",
                 "Discharge capacity [A.h]",
                 "Porosity times concentration",
+                
+                "X-averaged negative electrode loss nickel dissolution",
+#             "X-averaged positive electrode loss nickel dissolution",
+                "X-averaged positive electrode dissolution exchange current",
+                "X-averaged negative electrode dissolution exchange current",            
+                "Positive electrode loss nickel dissolution",
+                "Negative electrode loss nickel dissolution",            
+                "Positive electrode dissolution exchange current",
+                "Negative electrode dissolution exchange current",
             ]:
                 value = sol[var.name].data
                 if value.ndim == 1:
@@ -313,7 +322,7 @@ def cycle_adaptive_simulation_V2(model, parameter_values, experiment,SOC_0=1, sa
         cccv_handling=experiment.cccv_handling,
         drive_cycles={"DriveCycle": drive_cycle},
     )
-    Vmin = 3.0
+    Vmin = 2.7
     Vmax = 4.2
     esoh_model = pybamm.lithium_ion.ElectrodeSOH()
     esoh_sim = pybamm.Simulation(esoh_model, parameter_values=parameter_values)
@@ -421,6 +430,14 @@ def cycle_adaptive_simulation_V2(model, parameter_values, experiment,SOC_0=1, sa
                 "X-averaged positive particle concentration",
                 "Discharge capacity [A.h]",
                 "Porosity times concentration",
+                "X-averaged negative electrode loss nickel dissolution",
+#             "X-averaged positive electrode loss nickel dissolution",
+                "X-averaged positive electrode dissolution exchange current",
+                "X-averaged negative electrode dissolution exchange current",            
+                "Positive electrode loss nickel dissolution",
+                "Negative electrode loss nickel dissolution",            
+                "Positive electrode dissolution exchange current",
+                "Negative electrode dissolution exchange current",
             ]:
                 value = sol[var.name].data
                 if value.ndim == 1:
@@ -472,13 +489,28 @@ def cycle_adaptive_simulation_V2(model, parameter_values, experiment,SOC_0=1, sa
                         # ics[child.name] = y[start:end, np.newaxis]
                         end = start + 1
                         ics[child.name] = y[start] * np.ones((model.variables[var.name].size, 1))
-                        start = end
-                else:
+                        start = end                
+                elif var.name == "X-averaged negative electrode active material volume fraction":
                     # end = start + model.variables[var.name].size
                     # ics[var.name] = y[start:end, np.newaxis]
-                    end = start + 1
-                    ics[var.name] = y[start] * np.ones((model.variables[var.name].size, 1))
-                    start = end
+        #             end = start + 1
+                    ics[var.name] = y[1] * np.ones((model.variables[var.name].size, 1))
+        #             start = end
+                elif var.name == "X-averaged positive electrode active material volume fraction":
+                    ics[var.name] = y[2] * np.ones((model.variables[var.name].size, 1))
+                elif var.name == "X-averaged positive electrode loss nickel dissolution":
+                    ics[var.name] = y[3] * np.ones((model.variables[var.name].size, 1))
+                elif var.name == "X-averaged negative electrode loss nickel dissolution":
+                    ics[var.name] = 0 * np.ones((model.variables[var.name].size, 1))            
+
+                elif var.name == "X-averaged outer SEI thickness":
+                    ics[var.name] = y[4] * np.ones((model.variables[var.name].size, 1))
+
+                elif var.name == "X-averaged lithium plating concentration":
+                    ics[var.name] = y[5] * np.ones((model.variables[var.name].size, 1))            
+                elif var.name == "X-averaged dead lithium concentration":
+                    ics[var.name] = y[6] * np.ones((model.variables[var.name].size, 1))   
+
         model.set_initial_conditions_from(ics)
         return pybamm.Solution(
             [np.array([0])],
@@ -544,13 +576,13 @@ def cycle_adaptive_simulation_V2(model, parameter_values, experiment,SOC_0=1, sa
         c_save_p1 = sol["R-averaged positive particle concentration"].entries
         c_save_p = c_save_p1[1,:]
         dnli += parameter_values.evaluate(3600/param.F)*C_p_loss*np.average(c_save_p)
-        dy2 = np.zeros(6)
+        dy2 = dy
         dy2[0] = dnli
         dy2[1] = dCn
         dy2[2] = dCp
-        dy2[3] = dy[3]
-        dy2[4] = dy[4]
-        dy2[5] = dy[5]
+        # dy2[3] = dy[3]
+        # dy2[4] = dy[4]
+        # dy2[5] = dy[5]
 
         # parameter_values.update(
         #     {
@@ -729,7 +761,7 @@ def plotcomp(all_sumvars_dict0,all_sumvars_dict1):
         ax.plot(all_sumvars_dict1["Cycle number"],all_sumvars_dict1[name],"b")
         ax.set_title(split_long_string(name))
         if k ==2 or k==3:
-            ax.set_ylim([3,6.2])
+            ax.set_ylim([1.5,4.5])
         if k>3:
             ax.set_xlabel("Cycle number")
     fig.legend(["Baseline"] + ["Sim"], 

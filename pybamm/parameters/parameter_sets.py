@@ -206,7 +206,7 @@ Siegel2022 = {
     "electrolyte": "LiPF6_Siegel2022",
     "experiment": "1C_charge_from_empty_Mohtat2020",
     "sei": "example",
-    "lithium plating": "yang2017_Li_plating",
+    "lithium plating": "mohtat2020_Li_plating",
     # "citation": "Siegel2022",
 }
 
@@ -220,7 +220,7 @@ Andrew2022 = {
     "experiment": "1C_charge_from_empty_Mohtat2020",
     "sei": "example",
     "lithium plating": "mohtat2020_Li_plating",
-    # "citation": "Siegel2022",
+    # "citation": "Andrew2022",
 }
 
 
