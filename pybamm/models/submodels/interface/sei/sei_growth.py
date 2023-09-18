@@ -102,6 +102,7 @@ class SEIGrowth(BaseModel):
         T = variables["Negative electrode temperature"]
         R_sei = phase_param.R_sei
         R_plated_Li = phase_param.R_plated_Li
+        # eta_SEI = delta_phi - j * L_sei * R_sei
         eta_SEI = delta_phi - j * L_sei * R_sei -j * L_plated_Li * R_plated_Li
         # Thermal prefactor for reaction, interstitial and EC models
         prefactor = 1 / (1 + self.param.Theta * T)

@@ -107,6 +107,7 @@ class InverseButlerVolmer(BaseInterface):
         else:
             eta_plated_Li = pybamm.Scalar(0)
 
+        # delta_phi = eta_r + ocp - eta_sei
         delta_phi = eta_r + ocp - eta_sei - eta_plated_Li  # = phi_s - phi_e
 
         variables.update(self._get_standard_exchange_current_variables(j0))

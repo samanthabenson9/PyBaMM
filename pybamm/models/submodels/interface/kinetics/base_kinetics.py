@@ -128,6 +128,7 @@ class BaseKinetics(BaseInterface):
                 eta_plated_Li = -j_tot_av * L_plated_Li * R_plated_Li
             else:
                 eta_plated_Li = pybamm.Scalar(0)
+            # eta_r += eta_plated_Li
             eta_r += eta_plated_Li
 
         # Get number of electrons in reaction
